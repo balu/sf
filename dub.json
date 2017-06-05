@@ -1,0 +1,11 @@
+{
+    "name": "sf",
+    "description": "An ncurses based file selector.",
+    "authors": ["Balagopal Komarath"],
+    "license": "MIT",
+    "dependencies": {
+	"ncurses": "~master"
+    },
+    "targetType": "executable",
+    "mainSourceFile": "sf.d"
+}
