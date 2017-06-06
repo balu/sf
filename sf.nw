@@ -607,17 +607,18 @@ file list pad.
 
 <<Write the file at ViewIndex v into the file list pad>>=
 auto i = toInt(v);
-auto line = toStringz(
-  "%-5d %1s %1s %-20.20s %-d".
+auto line = "%-5d %1s %1s %-20.20s %-d".
     format(
       i,
       current == v ? ">" : " ",
       fileList.isSelected(v) ? "*" : " ",
       fileList.name(v),
-      fileList.size(v)));
+      fileList.size(v));
 wmove(fileListPad.win, i, 0);
 wclrtoeol(fileListPad.win);
-mvwprintw(fileListPad.win, i, 0, line);
+auto ncline = dstringz(line);
+waddwstr(fileListPad.win, ncline);
+free(ncline);
 
 @ We will provide overloads for reloading the entire file list into
 the pad or only specific files.
@@ -665,7 +666,9 @@ struct MainUI(alias sink)
       quitOnError(
         FileList.loadDirectory(dirpath),
 	"sf: Failed to load directory " ~ dirpath);
-    
+
+    setlocale(LC_ALL, "");
+
     infile  = fopen("/dev/tty", "rb");
     scope (failure) fclose(infile);
     
@@ -1314,12 +1317,11 @@ import std.array     : array;
 import std.ascii     : isWhite, isDigit;
 import std.typecons  : Nullable;
 import std.getopt    : defaultGetoptPrinter, getopt;
-import std.conv      : to;
+import std.conv      : to, dtext;
 
-import core.stdc.stdlib : exit;
+import core.stdc.stdlib : exit, malloc, free;
 import core.stdc.stdio  : FILE, fopen, fclose;
-    
-
+import core.stdc.locale : setlocale, LC_ALL;
 
 import algo = std.algorithm;
 import deimos.ncurses;
@@ -1483,6 +1485,17 @@ auto quitOnError(E)(lazy E expr, in string msg)
   assert(0);
 }
 
+auto dstringz(string s)
+{
+  auto r = cast(dchar*)malloc(dchar.sizeof * s.length + 1);
+  auto x = dtext(s);
+  for (auto i = 0; i < x.length; ++i) {
+    r[i] = x[i];
+  }
+  r[x.length] = 0;
+  return r;
+}
+
 
 @ Some useful aliases.
 
@@ -1499,6 +1512,12 @@ alias GLOB     = FileList.SortField.GLOB;
 alias SELECT   = FileList.SortField.SELECT;
 alias FILETYPE = FileList.SortField.FILETYPE;
 
-@ \section{Some implementation notes} There are many casts from
+@ \section*{Some implementation notes} There are many casts from
 unsigned long to int in the program. These do not check for integer
 overflow.
+
+Note that we are using [[waddwstr]] to print file information that
+should correctly handle unicode characters in the filename. The
+function [[dstringz]] converts a Dlang [[string]] into a
+null-terminated array of [[wchar_t = dchar]] (True on POSIX).
+
