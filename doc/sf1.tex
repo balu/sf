@@ -453,9 +453,18 @@ static FileList loadDirectory(in string path)
 \{
   FileList result;
 
-  // XXX: Handle FileException
-  foreach (f; dirEntries(path, SpanMode.shallow)) \{
-    result.list_ ~= FileImpl(f);
+  auto files = dirEntries(path, SpanMode.shallow);
+  while (!files.empty) \{ // nothrow?
+    auto f = files.front; // nothrow?
+    try \{
+      result.list_ ~= FileImpl(f);
+    \} catch (Exception e) \{
+      stderr.writeln("sf: Failed to load ", f.name);
+    \} finally \{
+      quitOnError(
+        files.popFront,
+        "sf: Failed to iterate directory " ~ path);
+    \}
   \}
 
   if (result.list_.length > 0) \{
@@ -652,7 +661,10 @@ struct MainUI(alias sink)
   \LA{}MainUI variables\RA{}
   
   this(in string dirpath) \{
-    fileList = FileList.loadDirectory(dirpath);
+    fileList =
+      quitOnError(
+        FileList.loadDirectory(dirpath),
+        "sf: Failed to load directory " ~ dirpath);
     
     infile  = fopen("/dev/tty", "rb");
     scope (failure) fclose(infile);
@@ -1289,7 +1301,7 @@ void main(string[] args)
 
 \nwendcode{}\nwbegincode{92}\moddef{Import statements}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 import std.string    : toStringz;
-import std.stdio     : writeln, write;
+import std.stdio     : writeln, write, stderr;
 import std.format    : format;
 import std.file      : DirEntry, dirEntries,
                        SpanMode, FileException;
@@ -1304,7 +1316,8 @@ import std.typecons  : Nullable;
 import std.getopt    : defaultGetoptPrinter, getopt;
 import std.conv      : to;
 
-import core.stdc.stdio : FILE, fopen, fclose;
+import core.stdc.stdlib : exit;
+import core.stdc.stdio  : FILE, fopen, fclose;
     
 
 
@@ -1451,6 +1464,23 @@ auto ubound(int val, int max)
 \{
   if (val > max) return max;
   return val;
+\}
+
+auto quitOnError(E)(lazy E expr, in string msg)
+\{
+  try \{
+    static if (is(E == void)) \{
+      expr();
+      return;
+    \} else \{
+      auto result = expr();
+      return result;
+    \}
+  \} catch (Exception e) \{
+    stderr.writeln (msg);
+    exit(1);
+  \}
+  assert(0);
 \}
 
 
