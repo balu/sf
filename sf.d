@@ -1,4 +1,4 @@
-#line 1306 "sf.nw"
+#line 1308 "sf.nw"
 import std.string    : toStringz;
 import std.stdio     : writeln, write, stderr;
 import std.format    : format;
@@ -22,7 +22,7 @@ import core.stdc.locale : setlocale, LC_ALL;
 import algo = std.algorithm;
 import deimos.ncurses;
 
-#line 1341 "sf.nw"
+#line 1343 "sf.nw"
 struct Index(string cookie)
 {
   size_t i_;
@@ -39,7 +39,7 @@ struct Index(string cookie)
   }
 }
 
-#line 1360 "sf.nw"
+#line 1362 "sf.nw"
 int toInt(T : Index!s, alias s)(in T x)
 {
   return cast(int)x;
@@ -124,7 +124,7 @@ auto vanillaIndexed(R)(R r)
   return VanillaIndexed!(R)(r);
 }
 
-#line 1447 "sf.nw"
+#line 1449 "sf.nw"
 auto ifNull(T : Nullable!U, U)(in T x, in U d)
 {
   return x.isNull ? d : x.get;
@@ -499,7 +499,7 @@ static FileList loadDirectory(in string path)
 #line 498 "sf.nw"
 }
 
-#line 1503 "sf.nw"
+#line 1505 "sf.nw"
 alias FileList.ViewIndex ViewIndex;
 alias FileList.FileIndex FileIndex;
 alias FileList.GlobIndex GlobIndex;
@@ -538,7 +538,7 @@ bool writeFiles = false;
 FILE* infile;
 FILE* outfile;
 
-#line 1214 "sf.nw"
+#line 1216 "sf.nw"
 ViewIndex first = ViewIndex(0);
 
 #line 663 "sf.nw"
@@ -652,12 +652,14 @@ private void show() {
 #line 717 "sf.nw"
 auto readKey()
 {
-  return wgetch(echoWin.win);
+  dchar c;
+  assert(wget_wch(echoWin.win, &c) == OK);
+  return c;
 }
 
-void writeChar(char ch)
+void writeChar(dchar ch)
 {
-  waddch(echoWin.win, ch);
+  writeStr(to!string(ch));
 }
 
 void writeStr(string s)
@@ -670,9 +672,9 @@ void clearEcho()
   wclear(echoWin.win);
 }
 
-void pushBackKey(char ch)
+void pushBackKey(dchar ch)
 {
-  ungetch(ch);
+  unget_wch(ch);
 }
 
 #line 705 "sf.nw"
@@ -728,11 +730,11 @@ free(ncline);
 
 #line 707 "sf.nw"
   
-#line 1178 "sf.nw"
+#line 1180 "sf.nw"
 void loop()
 {
   
-#line 1145 "sf.nw"
+#line 1147 "sf.nw"
 void setCurrent(in int newcur)
 {
   alias VI = ViewIndex;
@@ -757,27 +759,27 @@ void setGlobCurrent(in int newcur)
                  cast(int)fileList.globMatches - 1));
 }
 
-static int charToInt(in char c)
+static int charToInt(in dchar c)
 {
   assert(c.isDigit);
   return c - '0';
 }
 
-#line 1181 "sf.nw"
+#line 1183 "sf.nw"
   
-#line 888 "sf.nw"
-char c;
+#line 890 "sf.nw"
+dchar c;
 
-#line 929 "sf.nw"
+#line 931 "sf.nw"
 int n;
 string s;
 
-#line 1016 "sf.nw"
+#line 1018 "sf.nw"
 int m, beg, end;
 
-#line 1182 "sf.nw"
+#line 1184 "sf.nw"
   
-#line 754 "sf.nw"
+#line 756 "sf.nw"
 static struct DataStack(size_t nelems) {
   static struct DataStackElem {
     enum _Type { NODATA, NUM, STR, CH, MARK }
@@ -787,7 +789,7 @@ static struct DataStack(size_t nelems) {
     union _Data {
       int num;
       string str;
-      char ch;
+      dchar ch;
     }
 
     _Data data;
@@ -803,9 +805,9 @@ static struct DataStack(size_t nelems) {
       } else static if (is(T == string)) {
         type = STR;
         str = cast(string)data;
-      } else static if (is(T == char)) {
+      } else static if (is(T == dchar)) {
         type = CH;
-        ch = cast(char)data;
+        ch = cast(dchar)data;
       } else {
         static assert(false,
 	  "DataStackElem: Unsupported data type.");
@@ -816,7 +818,7 @@ static struct DataStack(size_t nelems) {
       final switch (type) {
       case NUM:    return to!string(num);
       case STR:    return "\"" ~ to!string(str) ~ "\"";
-      case CH:     return "\'" ~ ch;
+      case CH:     return "\'" ~ to!string(ch);
       case MARK:   return to!string(num) ~ "m";
       case NODATA: assert(0);
       }
@@ -832,7 +834,7 @@ static struct DataStack(size_t nelems) {
     static if (t == SType.NUM || t == SType.MARK)
       alias STypeToType = int;
     else static if (t == SType.CH)
-      alias STypeToType = char;
+      alias STypeToType = dchar;
     static if (t == SType.STR)
       alias STypeToType = string;
   }
@@ -891,9 +893,9 @@ alias CH     = SType.CH;
 alias STR    = SType.STR;
 alias NODATA = SType.NODATA;
 
-#line 1183 "sf.nw"
+#line 1185 "sf.nw"
   
-#line 873 "sf.nw"
+#line 875 "sf.nw"
 enum {
   START,
   READ_CH,
@@ -906,16 +908,16 @@ enum {
 int state = START;
 
 
-#line 1185 "sf.nw"
+#line 1187 "sf.nw"
   while (true) {
     
-#line 897 "sf.nw"
-c   = cast(char)readKey();
+#line 899 "sf.nw"
+c   = cast(dchar)readKey();
 
-#line 1187 "sf.nw"
+#line 1189 "sf.nw"
     switch(state) {
       
-#line 903 "sf.nw"
+#line 905 "sf.nw"
 case START:
   clearEcho();
   if (c.isWhite) {
@@ -937,9 +939,9 @@ case START:
   }
   break;
 
-#line 1189 "sf.nw"
+#line 1191 "sf.nw"
       
-#line 933 "sf.nw"
+#line 935 "sf.nw"
 case READ_CH:
   writeChar(c);
   dataStack.push!CH(c);
@@ -968,17 +970,17 @@ case READ_NUM:
   }
   break;
 
-#line 1190 "sf.nw"
+#line 1192 "sf.nw"
       
-#line 968 "sf.nw"
+#line 970 "sf.nw"
 case READ_COMMAND:
   switch (c) {
     
-#line 980 "sf.nw"
+#line 982 "sf.nw"
 case 'r':
   fileList.reverse(); break;
 
-#line 991 "sf.nw"
+#line 993 "sf.nw"
 case 'j':
   setCurrent(cur + dataStack.pop!NUM().ifNull(1));
   break;
@@ -997,10 +999,10 @@ case 'm':
   dataStack.push!MARK(cur);
   break;
 
-#line 1030 "sf.nw"
+#line 1032 "sf.nw"
 case 's':
   
-#line 1019 "sf.nw"
+#line 1021 "sf.nw"
 m = dataStack.pop!MARK().ifNull(cur);
 
 if (m > cur) {
@@ -1011,7 +1013,7 @@ if (m > cur) {
   end = cur + 1;
 }
 
-#line 1032 "sf.nw"
+#line 1034 "sf.nw"
   foreach (v; beg .. end) {
     auto v1 = ViewIndex(v);
     fileList.select(v1);
@@ -1019,7 +1021,7 @@ if (m > cur) {
   break;
 case 'S':
   
-#line 1019 "sf.nw"
+#line 1021 "sf.nw"
 m = dataStack.pop!MARK().ifNull(cur);
 
 if (m > cur) {
@@ -1030,7 +1032,7 @@ if (m > cur) {
   end = cur + 1;
 }
 
-#line 1039 "sf.nw"
+#line 1041 "sf.nw"
   foreach (v; beg .. end) {
     auto v1 = ViewIndex(v);
     fileList.deselect(v1);
@@ -1038,7 +1040,7 @@ if (m > cur) {
   break;
 case 't':
   
-#line 1019 "sf.nw"
+#line 1021 "sf.nw"
 m = dataStack.pop!MARK().ifNull(cur);
 
 if (m > cur) {
@@ -1049,7 +1051,7 @@ if (m > cur) {
   end = cur + 1;
 }
 
-#line 1046 "sf.nw"
+#line 1048 "sf.nw"
   foreach (v; beg .. end) {
     auto v1 = ViewIndex(v);
     if (fileList.isSelected(v1))
@@ -1059,9 +1061,9 @@ if (m > cur) {
   }
   break;
 
-#line 1059 "sf.nw"
+#line 1061 "sf.nw"
 case 'a':
-  char sortarg = dataStack.pop!CH().ifNull('n');
+  auto sortarg = dataStack.pop!CH().ifNull(dchar('n'));
   switch (sortarg) {
     case 'n': fileList.sort!(NAME);     break;
     case 'm': fileList.sort!(MTIME);    break;
@@ -1074,7 +1076,7 @@ case 'a':
   }
   break;
 
-#line 1078 "sf.nw"
+#line 1080 "sf.nw"
 case 'g':
   string globarg = dataStack.pop!STR().ifNull("");
   fileList.glob(globarg);
@@ -1112,15 +1114,15 @@ case 'N':
   state = START;
   break;
 
-#line 1118 "sf.nw"
+#line 1120 "sf.nw"
 case 'q':
   writeFiles = true;
   goto quit;
 
-#line 1123 "sf.nw"
+#line 1125 "sf.nw"
 default: break; // Unknown command letter.
 
-#line 1130 "sf.nw"
+#line 1132 "sf.nw"
 case 'p':
   clearEcho();
   auto top = dataStack.peek();
@@ -1132,17 +1134,17 @@ case 'P':
   dataStack.popAny();
   break;
 
-#line 971 "sf.nw"
+#line 973 "sf.nw"
   }
   state = START;
   break;
 
 default: assert(0);
 
-#line 1191 "sf.nw"
+#line 1193 "sf.nw"
     }
     
-#line 1217 "sf.nw"
+#line 1219 "sf.nw"
 int nlines = fileListWin.height;
 
 if (current < first) {
@@ -1157,7 +1159,7 @@ ViewIndex last = ViewIndex(
 reloadPad(iota(first, last));
 show();
 
-#line 1193 "sf.nw"
+#line 1195 "sf.nw"
   }
 
 quit: return;
@@ -1166,7 +1168,7 @@ quit: return;
 #line 708 "sf.nw"
 }
 
-#line 1235 "sf.nw"
+#line 1237 "sf.nw"
 void printn(R)(R files)
 {
   foreach (f; files) writeln(f);
@@ -1189,7 +1191,7 @@ void printz(R)(R files)
 }
 
 
-#line 1267 "sf.nw"
+#line 1269 "sf.nw"
 void main(string[] args)
 {
   enum OutputFormat {

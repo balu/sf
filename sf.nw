@@ -716,12 +716,14 @@ function [[clearEcho]] clears the echo area.
 <<Echo area functions>>=
 auto readKey()
 {
-  return wgetch(echoWin.win);
+  dchar c;
+  assert(wget_wch(echoWin.win, &c) == OK);
+  return c;
 }
 
-void writeChar(char ch)
+void writeChar(dchar ch)
 {
-  waddch(echoWin.win, ch);
+  writeStr(to!string(ch));
 }
 
 void writeStr(string s)
@@ -734,9 +736,9 @@ void clearEcho()
   wclear(echoWin.win);
 }
 
-void pushBackKey(char ch)
+void pushBackKey(dchar ch)
 {
-  ungetch(ch);
+  unget_wch(ch);
 }
 
 @ Now we describe our command processing loop. The input to the
@@ -760,7 +762,7 @@ static struct DataStack(size_t nelems) {
     union _Data {
       int num;
       string str;
-      char ch;
+      dchar ch;
     }
 
     _Data data;
@@ -776,9 +778,9 @@ static struct DataStack(size_t nelems) {
       } else static if (is(T == string)) {
         type = STR;
         str = cast(string)data;
-      } else static if (is(T == char)) {
+      } else static if (is(T == dchar)) {
         type = CH;
-        ch = cast(char)data;
+        ch = cast(dchar)data;
       } else {
         static assert(false,
 	  "DataStackElem: Unsupported data type.");
@@ -789,7 +791,7 @@ static struct DataStack(size_t nelems) {
       final switch (type) {
       case NUM:    return to!string(num);
       case STR:    return "\"" ~ to!string(str) ~ "\"";
-      case CH:     return "\'" ~ ch;
+      case CH:     return "\'" ~ to!string(ch);
       case MARK:   return to!string(num) ~ "m";
       case NODATA: assert(0);
       }
@@ -805,7 +807,7 @@ static struct DataStack(size_t nelems) {
     static if (t == SType.NUM || t == SType.MARK)
       alias STypeToType = int;
     else static if (t == SType.CH)
-      alias STypeToType = char;
+      alias STypeToType = dchar;
     static if (t == SType.STR)
       alias STypeToType = string;
   }
@@ -885,7 +887,7 @@ int state = START;
 the user.
 
 <<Local variables for command processor>>=
-char c;
+dchar c;
 
 @ The command processor works in iterations. In each iteration, it
 reads a key from the user and forwards the key to the appropriate
@@ -894,7 +896,7 @@ processor should echo the data item being entered by the user to
 provide feedback.
 
 <<Setup state for the command processor>>=
-c   = cast(char)readKey();
+c   = cast(dchar)readKey();
 
 @ The start state simply looks at the key and delegates to the
 appropriate state to handle the key.
@@ -1057,7 +1059,7 @@ sort field. We use the file name as the default sort field.
 
 <<Handle commands>>=
 case 'a':
-  char sortarg = dataStack.pop!CH().ifNull('n');
+  auto sortarg = dataStack.pop!CH().ifNull(dchar('n'));
   switch (sortarg) {
     case 'n': fileList.sort!(NAME);     break;
     case 'm': fileList.sort!(MTIME);    break;
@@ -1166,7 +1168,7 @@ void setGlobCurrent(in int newcur)
                  cast(int)fileList.globMatches - 1));
 }
 
-static int charToInt(in char c)
+static int charToInt(in dchar c)
 {
   assert(c.isDigit);
   return c - '0';
@@ -1519,5 +1521,6 @@ overflow.
 Note that we are using [[waddwstr]] to print file information that
 should correctly handle unicode characters in the filename. The
 function [[dstringz]] converts a Dlang [[string]] into a
-null-terminated array of [[wchar_t = dchar]] (True on POSIX).
+null-terminated array of [[wchar_t = dchar]] (True in POSIX).
 
+The program also makes the assumption [[wchar_t = wint_t = dchar]] which is true in POSIX.
