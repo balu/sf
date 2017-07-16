@@ -3,16 +3,19 @@ line of the form \unix{sf /path/to/dir} shows the list of files in the
 directory \unix{dir} and allows the user to select files from
 them. Upon exit, the \unix{sf} utility writes the full path of all
 selected files onto the standard output, one file per line.  We use an
-ncurses based UI as the primary motivation for this program is to
+ncurses based UI since the primary motivation for this program is to
 enable the user to quickly select some files to be processed by other
-command line utilities.
+command line utilities. The program also supports accepting a list of
+files from the standard input using \unix{-} as the directory
+argument.
 
 The central data structure manipulated by the \unix{sf} utility is the
 \emph{file list}. Upon startup, the file list contains all files in
-the directory \unix{dir}. All files are marked unselected upon
-startup. There are user commands to modify the selection and the file
-list. The program also maintains a \emph{current file pointer} to help
-the user move around in the file list.
+the directory \unix{dir} or the list of files specified in the
+standard input. All files are marked unselected upon startup. There
+are user commands to modify the selection and the file list. The
+program also maintains a \emph{current file pointer} to help the user
+move around in the file list.
 
 The following list describes the basic set of user commands.
 
@@ -60,7 +63,7 @@ mark, select all files between the mark and the current file.
 \end{description}
 
 The command processor maintains a data stack. The data items entered
-by the user and pushed onto the stack to be used by subsequent
+by the user are pushed onto the stack to be used by subsequent
 commands. Each data item is a string, or a number, or a character, or
 a mark. To push a data item to the stack, simply enter the data
 item. A mark is pushed to the stack by the \unix{m} command. The
@@ -91,7 +94,23 @@ provide some advanced functions.
 
 \end{description}
 
-We now define data structures used in our program.
+\unix{sf} also supports multiple output formats through the option
+\unix{-o} or the equivalent long form \unix{--output}. The possible
+arguments to this option are:
+
+\begin{description}
+
+\item [\unix{n}] One file per-line. Assumes that there are no newlines
+in filenames. This is the default.
+
+\item [\unix{q}] Double-quoted, separated by spaces.
+
+\item [\unix{z}] Files are separated by null-bytes. This can be useful
+to interface with \unix{xargs}.
+
+\end{description}
+
+\newpage
 
 The [[FileImpl]] structure is the representation of a file presented
 to the user. The standard library provided [[DirEntry]] is a structure
@@ -466,23 +485,48 @@ static FileList loadDirectory(in string path)
 	"sf: Failed to iterate directory " ~ path);
     }
   }
-
-  if (result.list_.length > 0) {
-    result.view_.reserve(result.list_.length);
-    result.file_.reserve(result.list_.length);
-
-    result.selected_ = new bool[result.list_.length];
-    result.view_     = array(
-                        iota(
-		         ViewIndex(0),
-                         ViewIndex(result.list_.length)));
-    result.file_     = array(
-                        iota(
-		         FileIndex(0),
-                         FileIndex(result.list_.length)));
-  }
- 
+  <<Initialize rest of FileList result>>
   return result;
+}
+
+@ Another way to create a [[FileList]] is by specifying the names of
+all files explicitly.
+
+<<FileList creation>>=
+static FileList fromPaths(in string[] paths)
+{
+  FileList result;
+
+  result.list_.reserve(paths.length);
+
+  foreach (p; paths) {
+    try {
+      result.list_ ~= FileImpl(p);
+    } catch (Exception e) {
+      stderr.writeln("sf: Failed to load ", p);
+    }
+  }
+  <<Initialize rest of FileList result>>
+  return result;
+}
+
+@ The following code initializes the rest of the [[FileList]] struct
+assuming that the [[list_]] field is properly initialized.
+
+<<Initialize rest of FileList result>>=
+if (result.list_.length > 0) {
+  result.view_.reserve(result.list_.length);
+  result.file_.reserve(result.list_.length);
+
+  result.selected_ = new bool[result.list_.length];
+  result.view_     = array(
+                      iota(
+                      ViewIndex(0),
+                      ViewIndex(result.list_.length)));
+  result.file_     = array(
+                      iota(
+                       FileIndex(0),
+                       FileIndex(result.list_.length)));
 }
 
 @ Finally, we combine all the above to define our [[FileList]]
@@ -517,8 +561,7 @@ Rectangle fileListPad;
 Rectangle echoWin;
 
 @ The full screen is desribed by the rectangle [[screen]]. The
-rectangles [[fileListWin]] and [[echoWin]] describes the file list
-area and echo area. Our UI consists of two parts: the file list and
+rectangles [[echoWin]] and [[fileListWin]] describes the echo area and the file list area. Our UI consists of two parts: the file list and
 the echo area. The file list displays the list of files (or a part of
 it) in the user-specified order. The echo area is for interacting with
 the user. The file list window will occupy all but the last line of
@@ -661,11 +704,8 @@ struct MainUI(alias sink)
 {
   <<MainUI variables>>
   
-  this(in string dirpath) {
-    fileList =
-      quitOnError(
-        FileList.loadDirectory(dirpath),
-	"sf: Failed to load directory " ~ dirpath);
+  this(FileList fl) {
+    fileList = fl;
 
     setlocale(LC_ALL, "");
 
@@ -707,11 +747,12 @@ struct MainUI(alias sink)
   <<loop function>>
 }
 
-@ The echo window can be accessed in the following ways: The function
-[[readKey]] reads a character entered by the user, the function
-[[writeChar]] writes the character to the current position in the echo
-area taking care of writing past the last position in the window, the
-function [[clearEcho]] clears the echo area.
+@ The echo window can be accessed programmatically in the following
+ways: The function [[readKey]] reads a character entered by the user,
+the function [[writeChar]] writes the character to the current
+position in the echo area taking care of writing past the last
+position in the window, the function [[clearEcho]] clears the echo
+area.
 
 <<Echo area functions>>=
 auto readKey()
@@ -1273,40 +1314,56 @@ void main(string[] args)
   q, // double-quoted separated by spaces.
   z, // separated by null bytes.
   }
+
   OutputFormat outFormat = OutputFormat.n;
   auto helpInformation =
     getopt(args,
-           "output|o", r"Output format
+     config.passThrough,
+     "output|o", r"Output format
     n - One file per-line. Assumes there are no newlines in filenames. (default)
     q - Double-quoted, separated by spaces.
     z - Separated by null bytes.", &outFormat
     );
   if (helpInformation.helpWanted) {
     defaultGetoptPrinter(
-      "sf [-o{n|q|z}] [<dir>]: Select files from <dir> or current directory.",
+      r"sf <options> [<dir>]: Select files from <dir> or current directory.
+sf <options> -: Select files from the list of files in standard input.",
       helpInformation.options);
     return;
   }
-  string dirpath = ".";
-  if (args.length > 1) {
-    dirpath = args[$ - 1];
-  }
+
+  FileList fl =
+  quitOnError(
+    {
+      if (args.length > 1) {
+        if (args[$ - 1] == "-") {
+          return FileList.fromPaths(stdin.byLineCopy.array);
+        } else {
+          return FileList.loadDirectory(args[$-1]);
+        }
+      } else {
+        return FileList.loadDirectory(".");
+      }
+    }(),
+    "sf: Failed to load file list."
+  );
+
   final switch (outFormat) {
   case OutputFormat.n:
-    MainUI!printn(dirpath);
+    MainUI!printn(fl);
     break;
   case OutputFormat.q:
-    MainUI!printq(dirpath);
+    MainUI!printq(fl);
     break;
   case OutputFormat.z:
-    MainUI!printz(dirpath);
+    MainUI!printz(fl);
     break;
   }
 }
 
 <<Import statements>>=
 import std.string    : toStringz;
-import std.stdio     : writeln, write, stderr;
+import std.stdio     : writeln, write, stderr, stdin;
 import std.format    : format;
 import std.file      : DirEntry, dirEntries,
                        SpanMode, FileException;
@@ -1318,7 +1375,7 @@ import std.range     : isInputRange, isRandomAccessRange,
 import std.array     : array;
 import std.ascii     : isWhite, isDigit;
 import std.typecons  : Nullable;
-import std.getopt    : defaultGetoptPrinter, getopt;
+import std.getopt    : defaultGetoptPrinter, getopt, config;
 import std.conv      : to, dtext;
 
 import core.stdc.stdlib : exit, malloc, free;
@@ -1329,13 +1386,13 @@ import algo = std.algorithm;
 import deimos.ncurses;
 
 @ Now we define the various index and array types. The type
-[[indexType!(cookie)]], where [[cookie]] is a literal string, is a
-distinct index type for distinct cookies. We disallow the possibility
-of mixing up conceptually distinct index types by overloading
-assignment in index types and using [[SafeRange]] in place of normal
-arrays. The function call [[vanillaIndexed(array)]] allows one to use
-plain [[size_t]] to index any array that can only be indexed using one
-of the special index types. This is useful to interface with standard
+[[indexType!(s)]], where [[s]] is a literal string, is a distinct
+index type for distinct strings. We disallow the possibility of mixing
+up conceptually distinct index types by overloading assignment in
+index types and using [[SafeRange]] in place of normal arrays. The
+function call [[vanillaIndexed(array)]] allows one to use plain
+[[size_t]] to index any array that can only be indexed using one of
+the special index types. This is useful to interface with standard
 library functions which expects all random access ranges to be
 indexable using [[size_t]].
 
@@ -1521,6 +1578,6 @@ overflow.
 Note that we are using [[waddwstr]] to print file information that
 should correctly handle unicode characters in the filename. The
 function [[dstringz]] converts a Dlang [[string]] into a
-null-terminated array of [[wchar_t = dchar]] (True in POSIX).
-
-The program also makes the assumption [[wchar_t = wint_t = dchar]] which is true in POSIX.
+null-terminated array of [[wchar_t = dchar]] (True in POSIX). The
+program also makes the assumption [[wchar_t = wint_t = dchar]] which
+is true in POSIX.

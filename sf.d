@@ -1,6 +1,6 @@
-#line 1308 "sf.nw"
+#line 1365 "sf.nw"
 import std.string    : toStringz;
-import std.stdio     : writeln, write, stderr;
+import std.stdio     : writeln, write, stderr, stdin;
 import std.format    : format;
 import std.file      : DirEntry, dirEntries,
                        SpanMode, FileException;
@@ -12,7 +12,7 @@ import std.range     : isInputRange, isRandomAccessRange,
 import std.array     : array;
 import std.ascii     : isWhite, isDigit;
 import std.typecons  : Nullable;
-import std.getopt    : defaultGetoptPrinter, getopt;
+import std.getopt    : defaultGetoptPrinter, getopt, config;
 import std.conv      : to, dtext;
 
 import core.stdc.stdlib : exit, malloc, free;
@@ -22,7 +22,7 @@ import core.stdc.locale : setlocale, LC_ALL;
 import algo = std.algorithm;
 import deimos.ncurses;
 
-#line 1343 "sf.nw"
+#line 1400 "sf.nw"
 struct Index(string cookie)
 {
   size_t i_;
@@ -39,7 +39,7 @@ struct Index(string cookie)
   }
 }
 
-#line 1362 "sf.nw"
+#line 1419 "sf.nw"
 int toInt(T : Index!s, alias s)(in T x)
 {
   return cast(int)x;
@@ -124,7 +124,7 @@ auto vanillaIndexed(R)(R r)
   return VanillaIndexed!(R)(r);
 }
 
-#line 1449 "sf.nw"
+#line 1506 "sf.nw"
 auto ifNull(T : Nullable!U, U)(in T x, in U d)
 {
   return x.isNull ? d : x.get;
@@ -178,19 +178,19 @@ auto dstringz(string s)
 }
 
 
-#line 492 "sf.nw"
+#line 536 "sf.nw"
 struct FileList
 {
   
-#line 148 "sf.nw"
+#line 167 "sf.nw"
 alias FileIndex = Index!("F");
 alias ViewIndex = Index!("V");
 alias GlobIndex = Index!("G");
 
-#line 167 "sf.nw"
+#line 186 "sf.nw"
 private {
   
-#line 105 "sf.nw"
+#line 124 "sf.nw"
 struct FileImpl
 {
   private:
@@ -226,7 +226,7 @@ struct FileImpl
   }
 }
 
-#line 169 "sf.nw"
+#line 188 "sf.nw"
   SafeRange!(FileImpl[],  FileIndex) list_;
   SafeRange!(FileIndex[], ViewIndex) file_;
   SafeRange!(ViewIndex[], FileIndex) view_;
@@ -236,9 +236,9 @@ struct FileImpl
   SafeRange!(bool[], FileIndex)      selected_;
 }
 
-#line 495 "sf.nw"
+#line 539 "sf.nw"
   
-#line 182 "sf.nw"
+#line 201 "sf.nw"
 int opApply(scope int delegate(ViewIndex) dg) {
   int result = 0;
   for (auto i = ViewIndex(0);
@@ -250,7 +250,7 @@ int opApply(scope int delegate(ViewIndex) dg) {
   return result;
 }
 
-#line 197 "sf.nw"
+#line 216 "sf.nw"
 int opApply(scope int delegate(GlobIndex) dg) {
   int result = 0;
   for (auto i = GlobIndex(0);
@@ -262,7 +262,7 @@ int opApply(scope int delegate(GlobIndex) dg) {
   return result;
 }
 
-#line 213 "sf.nw"
+#line 232 "sf.nw"
 To convert(To, From)(in From index) const {
   static if (is(To == From)) return index;
   
@@ -284,7 +284,7 @@ To convert(To, From)(in From index) const {
 }
 
 
-#line 239 "sf.nw"
+#line 258 "sf.nw"
 template isIndexType(T)
 {
   enum isIndexType =
@@ -325,16 +325,16 @@ const {
   }
 }
 
-#line 404 "sf.nw"
+#line 423 "sf.nw"
 @property
 auto globMatches() const
 {
   return glob_.length;
 }
 
-#line 496 "sf.nw"
+#line 540 "sf.nw"
   
-#line 291 "sf.nw"
+#line 310 "sf.nw"
 private void moveToFront(R)(in R s)
   if (isInputRange!R && hasLength!R &&
       is(ElementType!R == FileIndex))
@@ -379,7 +379,7 @@ void sort(SortField sf)()
   fixupView();
 }
 
-#line 341 "sf.nw"
+#line 360 "sf.nw"
 private bool fileLess(SortField sf)(in FileIndex i, in FileIndex j)
 {
   switch (sf) {
@@ -414,7 +414,7 @@ void sort(SortField sf)()
   fixupView();
 }
 
-#line 379 "sf.nw"
+#line 398 "sf.nw"
 void reverse()
 {
   algo.reverse(vanillaIndexed(file_));
@@ -422,7 +422,7 @@ void reverse()
   fixupView();
 }
 
-#line 390 "sf.nw"
+#line 409 "sf.nw"
 void glob(in string pattern)
 {
   glob_ = [];
@@ -433,7 +433,7 @@ void glob(in string pattern)
   }
 }
 
-#line 418 "sf.nw"
+#line 437 "sf.nw"
 void select(T)(in T f) if (isIndexType!T)
 {
   selected_[convert!FileIndex(f)] = true;
@@ -449,7 +449,7 @@ bool isSelected(T)(in T f) if (isIndexType!T)
   return selected_[convert!FileIndex(f)];
 }
 
-#line 439 "sf.nw"
+#line 458 "sf.nw"
 @property
 auto selected()
 {
@@ -457,9 +457,9 @@ auto selected()
   return algo.filter!(pred)(vanillaIndexed(file_));
 }
 
-#line 497 "sf.nw"
+#line 541 "sf.nw"
   
-#line 452 "sf.nw"
+#line 471 "sf.nw"
 static FileList loadDirectory(in string path)
 {
   FileList result;
@@ -477,29 +477,66 @@ static FileList loadDirectory(in string path)
 	"sf: Failed to iterate directory " ~ path);
     }
   }
+  
+#line 517 "sf.nw"
+if (result.list_.length > 0) {
+  result.view_.reserve(result.list_.length);
+  result.file_.reserve(result.list_.length);
 
-  if (result.list_.length > 0) {
-    result.view_.reserve(result.list_.length);
-    result.file_.reserve(result.list_.length);
+  result.selected_ = new bool[result.list_.length];
+  result.view_     = array(
+                      iota(
+                      ViewIndex(0),
+                      ViewIndex(result.list_.length)));
+  result.file_     = array(
+                      iota(
+                       FileIndex(0),
+                       FileIndex(result.list_.length)));
+}
 
-    result.selected_ = new bool[result.list_.length];
-    result.view_     = array(
-                        iota(
-		         ViewIndex(0),
-                         ViewIndex(result.list_.length)));
-    result.file_     = array(
-                        iota(
-		         FileIndex(0),
-                         FileIndex(result.list_.length)));
-  }
- 
+#line 489 "sf.nw"
   return result;
 }
 
-#line 498 "sf.nw"
+#line 496 "sf.nw"
+static FileList fromPaths(in string[] paths)
+{
+  FileList result;
+
+  result.list_.reserve(paths.length);
+
+  foreach (p; paths) {
+    try {
+      result.list_ ~= FileImpl(p);
+    } catch (Exception e) {
+      stderr.writeln("sf: Failed to load ", p);
+    }
+  }
+  
+#line 517 "sf.nw"
+if (result.list_.length > 0) {
+  result.view_.reserve(result.list_.length);
+  result.file_.reserve(result.list_.length);
+
+  result.selected_ = new bool[result.list_.length];
+  result.view_     = array(
+                      iota(
+                      ViewIndex(0),
+                      ViewIndex(result.list_.length)));
+  result.file_     = array(
+                      iota(
+                       FileIndex(0),
+                       FileIndex(result.list_.length)));
 }
 
-#line 1505 "sf.nw"
+#line 510 "sf.nw"
+  return result;
+}
+
+#line 542 "sf.nw"
+}
+
+#line 1562 "sf.nw"
 alias FileList.ViewIndex ViewIndex;
 alias FileList.FileIndex FileIndex;
 alias FileList.GlobIndex GlobIndex;
@@ -512,11 +549,11 @@ alias GLOB     = FileList.SortField.GLOB;
 alias SELECT   = FileList.SortField.SELECT;
 alias FILETYPE = FileList.SortField.FILETYPE;
 
-#line 660 "sf.nw"
+#line 703 "sf.nw"
 struct MainUI(alias sink)
 {
   
-#line 506 "sf.nw"
+#line 550 "sf.nw"
 static struct Rectangle {
   int height;
   int width;
@@ -530,7 +567,7 @@ Rectangle fileListWin;
 Rectangle fileListPad;
 Rectangle echoWin;
 
-#line 648 "sf.nw"
+#line 691 "sf.nw"
 FileList fileList;
 ViewIndex current = ViewIndex(0);
 Nullable!GlobIndex globCurrent;
@@ -538,16 +575,13 @@ bool writeFiles = false;
 FILE* infile;
 FILE* outfile;
 
-#line 1216 "sf.nw"
+#line 1257 "sf.nw"
 ViewIndex first = ViewIndex(0);
 
-#line 663 "sf.nw"
+#line 706 "sf.nw"
   
-  this(in string dirpath) {
-    fileList =
-      quitOnError(
-        FileList.loadDirectory(dirpath),
-	"sf: Failed to load directory " ~ dirpath);
+  this(FileList fl) {
+    fileList = fl;
 
     setlocale(LC_ALL, "");
 
@@ -567,7 +601,7 @@ ViewIndex first = ViewIndex(0);
     assert(ERR != curs_set(0));
     
     
-#line 537 "sf.nw"
+#line 580 "sf.nw"
 int x, y;
 
 getmaxyx(stdscr, y, x);
@@ -606,7 +640,7 @@ fileListPad.win    = newpad(
   fileListPad.height,
   fileListPad.width);
 
-#line 688 "sf.nw"
+#line 728 "sf.nw"
     reloadPad();
     show();
     loop();
@@ -623,7 +657,7 @@ fileListPad.win    = newpad(
   }
   
   
-#line 580 "sf.nw"
+#line 623 "sf.nw"
 private void show() {
   int sminrow, smincol, smaxrow, smaxcol;
   int fst = cast(int)first;
@@ -647,9 +681,9 @@ private void show() {
    	   smaxcol);
 }
 
-#line 704 "sf.nw"
+#line 744 "sf.nw"
   
-#line 717 "sf.nw"
+#line 758 "sf.nw"
 auto readKey()
 {
   dchar c;
@@ -677,14 +711,14 @@ void pushBackKey(dchar ch)
   unget_wch(ch);
 }
 
-#line 705 "sf.nw"
+#line 745 "sf.nw"
   
-#line 627 "sf.nw"
+#line 670 "sf.nw"
 private void reloadPad()
 {
   foreach (ViewIndex v; fileList) {
     
-#line 609 "sf.nw"
+#line 652 "sf.nw"
 auto i = toInt(v);
 auto line = "%-5d %1s %1s %-20.20s %-d".
     format(
@@ -699,7 +733,7 @@ auto ncline = dstringz(line);
 waddwstr(fileListPad.win, ncline);
 free(ncline);
 
-#line 631 "sf.nw"
+#line 674 "sf.nw"
   }
 }
 
@@ -708,7 +742,7 @@ private void reloadPad(R)(R files)
 {
   foreach (ViewIndex v; files) {
     
-#line 609 "sf.nw"
+#line 652 "sf.nw"
 auto i = toInt(v);
 auto line = "%-5d %1s %1s %-20.20s %-d".
     format(
@@ -723,18 +757,18 @@ auto ncline = dstringz(line);
 waddwstr(fileListPad.win, ncline);
 free(ncline);
 
-#line 639 "sf.nw"
+#line 682 "sf.nw"
   }
 }
 
 
-#line 707 "sf.nw"
+#line 747 "sf.nw"
   
-#line 1180 "sf.nw"
+#line 1221 "sf.nw"
 void loop()
 {
   
-#line 1147 "sf.nw"
+#line 1188 "sf.nw"
 void setCurrent(in int newcur)
 {
   alias VI = ViewIndex;
@@ -765,21 +799,21 @@ static int charToInt(in dchar c)
   return c - '0';
 }
 
-#line 1183 "sf.nw"
+#line 1224 "sf.nw"
   
-#line 890 "sf.nw"
+#line 931 "sf.nw"
 dchar c;
 
-#line 931 "sf.nw"
+#line 972 "sf.nw"
 int n;
 string s;
 
-#line 1018 "sf.nw"
+#line 1059 "sf.nw"
 int m, beg, end;
 
-#line 1184 "sf.nw"
+#line 1225 "sf.nw"
   
-#line 756 "sf.nw"
+#line 797 "sf.nw"
 static struct DataStack(size_t nelems) {
   static struct DataStackElem {
     enum _Type { NODATA, NUM, STR, CH, MARK }
@@ -893,9 +927,9 @@ alias CH     = SType.CH;
 alias STR    = SType.STR;
 alias NODATA = SType.NODATA;
 
-#line 1185 "sf.nw"
+#line 1226 "sf.nw"
   
-#line 875 "sf.nw"
+#line 916 "sf.nw"
 enum {
   START,
   READ_CH,
@@ -908,16 +942,16 @@ enum {
 int state = START;
 
 
-#line 1187 "sf.nw"
+#line 1228 "sf.nw"
   while (true) {
     
-#line 899 "sf.nw"
+#line 940 "sf.nw"
 c   = cast(dchar)readKey();
 
-#line 1189 "sf.nw"
+#line 1230 "sf.nw"
     switch(state) {
       
-#line 905 "sf.nw"
+#line 946 "sf.nw"
 case START:
   clearEcho();
   if (c.isWhite) {
@@ -939,9 +973,9 @@ case START:
   }
   break;
 
-#line 1191 "sf.nw"
+#line 1232 "sf.nw"
       
-#line 935 "sf.nw"
+#line 976 "sf.nw"
 case READ_CH:
   writeChar(c);
   dataStack.push!CH(c);
@@ -970,17 +1004,17 @@ case READ_NUM:
   }
   break;
 
-#line 1192 "sf.nw"
+#line 1233 "sf.nw"
       
-#line 970 "sf.nw"
+#line 1011 "sf.nw"
 case READ_COMMAND:
   switch (c) {
     
-#line 982 "sf.nw"
+#line 1023 "sf.nw"
 case 'r':
   fileList.reverse(); break;
 
-#line 993 "sf.nw"
+#line 1034 "sf.nw"
 case 'j':
   setCurrent(cur + dataStack.pop!NUM().ifNull(1));
   break;
@@ -999,10 +1033,10 @@ case 'm':
   dataStack.push!MARK(cur);
   break;
 
-#line 1032 "sf.nw"
+#line 1073 "sf.nw"
 case 's':
   
-#line 1021 "sf.nw"
+#line 1062 "sf.nw"
 m = dataStack.pop!MARK().ifNull(cur);
 
 if (m > cur) {
@@ -1013,7 +1047,7 @@ if (m > cur) {
   end = cur + 1;
 }
 
-#line 1034 "sf.nw"
+#line 1075 "sf.nw"
   foreach (v; beg .. end) {
     auto v1 = ViewIndex(v);
     fileList.select(v1);
@@ -1021,7 +1055,7 @@ if (m > cur) {
   break;
 case 'S':
   
-#line 1021 "sf.nw"
+#line 1062 "sf.nw"
 m = dataStack.pop!MARK().ifNull(cur);
 
 if (m > cur) {
@@ -1032,7 +1066,7 @@ if (m > cur) {
   end = cur + 1;
 }
 
-#line 1041 "sf.nw"
+#line 1082 "sf.nw"
   foreach (v; beg .. end) {
     auto v1 = ViewIndex(v);
     fileList.deselect(v1);
@@ -1040,7 +1074,7 @@ if (m > cur) {
   break;
 case 't':
   
-#line 1021 "sf.nw"
+#line 1062 "sf.nw"
 m = dataStack.pop!MARK().ifNull(cur);
 
 if (m > cur) {
@@ -1051,7 +1085,7 @@ if (m > cur) {
   end = cur + 1;
 }
 
-#line 1048 "sf.nw"
+#line 1089 "sf.nw"
   foreach (v; beg .. end) {
     auto v1 = ViewIndex(v);
     if (fileList.isSelected(v1))
@@ -1061,7 +1095,7 @@ if (m > cur) {
   }
   break;
 
-#line 1061 "sf.nw"
+#line 1102 "sf.nw"
 case 'a':
   auto sortarg = dataStack.pop!CH().ifNull(dchar('n'));
   switch (sortarg) {
@@ -1076,7 +1110,7 @@ case 'a':
   }
   break;
 
-#line 1080 "sf.nw"
+#line 1121 "sf.nw"
 case 'g':
   string globarg = dataStack.pop!STR().ifNull("");
   fileList.glob(globarg);
@@ -1114,15 +1148,15 @@ case 'N':
   state = START;
   break;
 
-#line 1120 "sf.nw"
+#line 1161 "sf.nw"
 case 'q':
   writeFiles = true;
   goto quit;
 
-#line 1125 "sf.nw"
+#line 1166 "sf.nw"
 default: break; // Unknown command letter.
 
-#line 1132 "sf.nw"
+#line 1173 "sf.nw"
 case 'p':
   clearEcho();
   auto top = dataStack.peek();
@@ -1134,17 +1168,17 @@ case 'P':
   dataStack.popAny();
   break;
 
-#line 973 "sf.nw"
+#line 1014 "sf.nw"
   }
   state = START;
   break;
 
 default: assert(0);
 
-#line 1193 "sf.nw"
+#line 1234 "sf.nw"
     }
     
-#line 1219 "sf.nw"
+#line 1260 "sf.nw"
 int nlines = fileListWin.height;
 
 if (current < first) {
@@ -1159,16 +1193,16 @@ ViewIndex last = ViewIndex(
 reloadPad(iota(first, last));
 show();
 
-#line 1195 "sf.nw"
+#line 1236 "sf.nw"
   }
 
 quit: return;
 }
 
-#line 708 "sf.nw"
+#line 748 "sf.nw"
 }
 
-#line 1237 "sf.nw"
+#line 1278 "sf.nw"
 void printn(R)(R files)
 {
   foreach (f; files) writeln(f);
@@ -1191,7 +1225,7 @@ void printz(R)(R files)
 }
 
 
-#line 1269 "sf.nw"
+#line 1310 "sf.nw"
 void main(string[] args)
 {
   enum OutputFormat {
@@ -1199,33 +1233,49 @@ void main(string[] args)
   q, // double-quoted separated by spaces.
   z, // separated by null bytes.
   }
+
   OutputFormat outFormat = OutputFormat.n;
   auto helpInformation =
     getopt(args,
-           "output|o", r"Output format
+     config.passThrough,
+     "output|o", r"Output format
     n - One file per-line. Assumes there are no newlines in filenames. (default)
     q - Double-quoted, separated by spaces.
     z - Separated by null bytes.", &outFormat
     );
   if (helpInformation.helpWanted) {
     defaultGetoptPrinter(
-      "sf [-o{n|q|z}] [<dir>]: Select files from <dir> or current directory.",
+      r"sf <options> [<dir>]: Select files from <dir> or current directory.
+sf <options> -: Select files from the list of files in standard input.",
       helpInformation.options);
     return;
   }
-  string dirpath = ".";
-  if (args.length > 1) {
-    dirpath = args[$ - 1];
-  }
+
+  FileList fl =
+  quitOnError(
+    {
+      if (args.length > 1) {
+        if (args[$ - 1] == "-") {
+          return FileList.fromPaths(stdin.byLineCopy.array);
+        } else {
+          return FileList.loadDirectory(args[$-1]);
+        }
+      } else {
+        return FileList.loadDirectory(".");
+      }
+    }(),
+    "sf: Failed to load file list."
+  );
+
   final switch (outFormat) {
   case OutputFormat.n:
-    MainUI!printn(dirpath);
+    MainUI!printn(fl);
     break;
   case OutputFormat.q:
-    MainUI!printq(dirpath);
+    MainUI!printq(fl);
     break;
   case OutputFormat.z:
-    MainUI!printz(dirpath);
+    MainUI!printz(fl);
     break;
   }
 }
