@@ -54,6 +54,9 @@ command.
 \item [\unix{q}] Quit and write paths of all selected files to
 standard output.
 
+\item [\unix{Q}] Quit without writing paths of all selected files to
+standard output.
+
 \item [\unix{s}] Select the current file or if there is an active
 mark, select all files between the mark and the current file.
 
@@ -444,7 +447,7 @@ void deselect(T)(in T f) if (isIndexType!T)
   selected_[convert!FileIndex(f)] = false;
 }
 
-bool isSelected(T)(in T f) if (isIndexType!T)
+bool isSelected(T)(in T f) const if (isIndexType!T)
 {
   return selected_[convert!FileIndex(f)];
 }
@@ -605,7 +608,10 @@ echoWin.win    = subwin(stdscr,
   echoWin.width,
   echoWin.y,
   echoWin.x);
-assert(OK == keypad(echoWin.win, true));
+enforce(
+  OK == keypad(echoWin.win, true),
+  "sf: Failed to initialize UI."
+);
 
 fileListPad.height = cast(int)fileList.length + fileListWin.height;
 fileListPad.width  = screen.width;
@@ -650,13 +656,7 @@ file list pad.
 
 <<Write the file at ViewIndex v into the file list pad>>=
 auto i = toInt(v);
-auto line = "%-5d %1s %1s %-20.20s %-d".
-    format(
-      i,
-      current == v ? ">" : " ",
-      fileList.isSelected(v) ? "*" : " ",
-      fileList.name(v),
-      fileList.size(v));
+auto line = formatFile.print(this.fileList, v);
 wmove(fileListPad.win, i, 0);
 wclrtoeol(fileListPad.win);
 auto ncline = dstringz(line);
@@ -682,6 +682,102 @@ private void reloadPad(R)(R files)
   }
 }
 
+@ The following code determine how a file is actually displayed in the
+UI. We want the display to be easily configurable. The [[FieldSpec]]
+is an abstract base class that can be overriden to specify how to
+display fields. For ex., the [[name]] function takes the preferred
+field width in percentage and minimum width as parameters and returns
+an instance of [[FieldSpec]] that overrides [[print]] to print the
+name of the given file within the specified width. Note that the
+[[realWidth]] field is filled in later by the function
+[[makeFileFormat]] based on the requested preferred and min widths.
+
+<<File display routines>>=
+static class FieldSpec
+{
+  Percent preferredWidth;
+  int     minWidth;
+  int     realWidth;
+
+  this(Percent p, int min) {
+    preferredWidth = p;
+    minWidth = min;
+  }
+
+  string print(in FileList fl, in ViewIndex v) {
+    assert(0);
+  }
+}
+
+static auto name(Percent p, int min)
+{
+  return new class FieldSpec {
+    this() { super(p, min); }
+    override string print(in FileList fl, in ViewIndex v)
+    {
+      auto w = to!string(realWidth);
+      return format("%-" ~ w ~ "." ~ w ~ "s", fl.name(v));
+    }
+  };
+}
+
+static auto line(Percent p, int min)
+{
+  return new class FieldSpec {
+    this() { super(p, min); }
+    override string print(in FileList fl, in ViewIndex v)
+    {
+      auto w = to!string(realWidth);
+      return format("%-" ~ w ~ "d", v);
+    }
+  };
+}
+
+static auto space(int n = 1)
+{
+  return new class FieldSpec {
+    this() { super(0.percent, n); }
+    override string print(in FileList fl, in ViewIndex v)
+    {
+      return " ";
+    }
+  };
+}
+
+static auto selected(string marker)
+{
+  return new class FieldSpec {
+    this() { super(0.percent, 1); }
+    override string print(in FileList fl, in ViewIndex v)
+    {
+      auto selectedp = &fl.isSelected!ViewIndex;
+      return selectedp(v) ? marker : " ";
+    }
+  };
+}
+
+auto fcurrent(string marker)
+{
+  return new class FieldSpec {
+    this() { super(0.percent, 1); }
+    override string print(in FileList fl, in ViewIndex v)
+    {
+      return current == v ? marker : " ";
+    }
+  };
+}
+
+static auto size(Percent p, int min)
+{
+  return new class FieldSpec {
+    this() { super(p, min); }
+    override string print(in FileList fl, in ViewIndex v)
+    {
+      return format("%" ~ to!string(realWidth) ~ "d", fl.size(v));
+    }
+  };
+}
+
 @ The main UI stores some state related to the file list such as the
 file list itself, the current file, and the current glob matched file
 in a glob search (which is null if there no glob search has been done
@@ -695,9 +791,49 @@ bool writeFiles = false;
 FILE* infile;
 FILE* outfile;
 
+@ The [[formatFile]] variable stores a [[FieldSpec]] instance that
+prints all the fields. The function [[makeFileFormat]] is a helper
+function that can be used to create formatting functions. This
+function accepts a list of [[FieldSpec]] objects. For example, The
+call [[makeFileFormat(]][[line(10.percent, 5),]][[ name(90.percent,
+20))]] creates a file formatter that uses the first 10 percent of line
+width to display the line number and the remaining 90 percent to
+display the file name.
+
+<<MainUI variables>>=
+FieldSpec formatFile;
+
+FieldSpec makeFileFormat(FieldSpec[] args...)
+{
+  int total;
+
+  foreach (arg; args) {
+    arg.realWidth = lbound(
+      (arg.preferredWidth.value * fileListWin.width) / 100,
+      arg.minWidth);
+    total += arg.realWidth;
+  }
+
+  enforce(
+    total <= fileListWin.width,
+    "sf: screen not wide enough to display files."
+  );
+
+  return new class FieldSpec {
+    this() { super(100.percent, fileListWin.width); }
+    override string print(in FileList fl, in ViewIndex v) {
+      string result;
+      foreach (arg; args) {
+        result ~= arg.print(fl, v);
+      }
+      return result;
+    }
+  };
+}
+
 @ We now define the main UI structure. The [[alias sink]] parameter is
 the sink function that consumes the range of selected files. It is
-called if the user pressed 'q'.
+called if the user pressed 'q' to exit the application.
 
 <<MainUI definition>>=
 struct MainUI(alias sink)
@@ -715,16 +851,33 @@ struct MainUI(alias sink)
     outfile = fopen("/dev/tty", "wb");
     scope (failure) fclose(outfile);
     
-    assert(newterm(cast(char*)null, outfile, infile));
+    enforce(
+      newterm(cast(char*)null, outfile, infile),
+      "sf: Failed to initialize UI."
+    );
+
     scope (failure) endwin();
     
     // endwin() restores everything if anything follows fails.
     
-    assert(OK == noecho());
-    assert(OK == nonl());
-    assert(ERR != curs_set(0));
+    enforce(
+      OK == noecho() &&
+      OK == nonl()   &&
+      ERR != curs_set(0),
+      "sf: Failed to initialize UI."
+    );
     
     <<Initialize UI components>>
+
+    formatFile = makeFileFormat(
+                   line(0.percent, 5),
+                   fcurrent(">"),
+		   space(),
+		   selected("*"),
+		   space(),
+                   name(50.percent, 15),
+		   size(15.percent, 10));
+
     reloadPad();
     show();
     loop();
@@ -739,11 +892,11 @@ struct MainUI(alias sink)
 	              (fileList.selected));
     }
   }
-  
+
   <<show function>>
   <<Echo area functions>>
   <<reloadPad function>>
-
+  <<File display routines>>
   <<loop function>>
 }
 
@@ -758,7 +911,10 @@ area.
 auto readKey()
 {
   dchar c;
-  assert(wget_wch(echoWin.win, &c) == OK);
+  enforce(
+    wget_wch(echoWin.win, &c) == OK,
+    "sf: Failed to initialize UI."
+  );
   return c;
 }
 
@@ -1162,6 +1318,10 @@ case 'q':
   writeFiles = true;
   goto quit;
 
+case 'Q':
+  writeFiles = false;
+  goto quit;
+
 <<Handle commands>>=
 default: break; // Unknown command letter.
 
@@ -1310,9 +1470,9 @@ void printz(R)(R files)
 void main(string[] args)
 {
   enum OutputFormat {
-  n, // One file per-line. Assumes no newlines in filenames.
-  q, // double-quoted separated by spaces.
-  z, // separated by null bytes.
+  n,
+  q,
+  z,
   }
 
   OutputFormat outFormat = OutputFormat.n;
@@ -1348,16 +1508,20 @@ sf <options> -: Select files from the list of files in standard input.",
     "sf: Failed to load file list."
   );
 
-  final switch (outFormat) {
-  case OutputFormat.n:
-    MainUI!printn(fl);
-    break;
-  case OutputFormat.q:
-    MainUI!printq(fl);
-    break;
-  case OutputFormat.z:
-    MainUI!printz(fl);
-    break;
+  try {
+    final switch (outFormat) {
+    case OutputFormat.n:
+      MainUI!printn(fl);
+      break;
+    case OutputFormat.q:
+      MainUI!printq(fl);
+      break;
+    case OutputFormat.z:
+      MainUI!printz(fl);
+      break;
+    }
+  } catch (Exception e) {
+    stderr.writeln(e.msg);
   }
 }
 
@@ -1377,6 +1541,7 @@ import std.ascii     : isWhite, isDigit;
 import std.typecons  : Nullable;
 import std.getopt    : defaultGetoptPrinter, getopt, config;
 import std.conv      : to, dtext;
+import std.exception : enforce;
 
 import core.stdc.stdlib : exit, malloc, free;
 import core.stdc.stdio  : FILE, fopen, fclose;
@@ -1538,7 +1703,7 @@ auto quitOnError(E)(lazy E expr, in string msg)
       return result;
     }
   } catch (Exception e) {
-    stderr.writeln (msg);
+    stderr.writeln(msg);
     exit(1);
   }
   assert(0);
@@ -1555,6 +1720,17 @@ auto dstringz(string s)
   return r;
 }
 
+struct Percent
+{
+  int value;
+}
+
+auto percent(int val)
+{
+  assert(0 <= val && val <= 100,
+         "Invalid percentage value.");
+  return Percent(val);
+}
 
 @ Some useful aliases.
 

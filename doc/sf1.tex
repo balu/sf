@@ -54,6 +54,9 @@ command.
 \item [\unix{q}] Quit and write paths of all selected files to
 standard output.
 
+\item [\unix{Q}] Quit without writing paths of all selected files to
+standard output.
+
 \item [\unix{s}] Select the current file or if there is an active
 mark, select all files between the mark and the current file.
 
@@ -444,7 +447,7 @@ void deselect(T)(in T f) if (isIndexType!T)
   selected_[convert!FileIndex(f)] = false;
 \}
 
-bool isSelected(T)(in T f) if (isIndexType!T)
+bool isSelected(T)(in T f) const if (isIndexType!T)
 \{
   return selected_[convert!FileIndex(f)];
 \}
@@ -605,7 +608,10 @@ echoWin.win    = subwin(stdscr,
   echoWin.width,
   echoWin.y,
   echoWin.x);
-assert(OK == keypad(echoWin.win, true));
+enforce(
+  OK == keypad(echoWin.win, true),
+  "sf: Failed to initialize UI."
+);
 
 fileListPad.height = cast(int)fileList.length + fileListWin.height;
 fileListPad.width  = screen.width;
@@ -650,13 +656,7 @@ file list pad.
 
 \nwenddocs{}\nwbegincode{44}\moddef{Write the file at ViewIndex v into the file list pad}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 auto i = toInt(v);
-auto line = "%-5d %1s %1s %-20.20s %-d".
-    format(
-      i,
-      current == v ? ">" : " ",
-      fileList.isSelected(v) ? "*" : " ",
-      fileList.name(v),
-      fileList.size(v));
+auto line = formatFile.print(this.fileList, v);
 wmove(fileListPad.win, i, 0);
 wclrtoeol(fileListPad.win);
 auto ncline = dstringz(line);
@@ -682,12 +682,108 @@ private void reloadPad(R)(R files)
   \}
 \}
 
-\nwendcode{}\nwbegindocs{47}The main UI stores some state related to the file list such as the
+\nwendcode{}\nwbegindocs{47}The following code determine how a file is actually displayed in the
+UI. We want the display to be easily configurable. The {\Tt{}FieldSpec\nwendquote}
+is an abstract base class that can be overriden to specify how to
+display fields. For ex., the {\Tt{}name\nwendquote} function takes the preferred
+field width in percentage and minimum width as parameters and returns
+an instance of {\Tt{}FieldSpec\nwendquote} that overrides {\Tt{}print\nwendquote} to print the
+name of the given file within the specified width. Note that the
+{\Tt{}realWidth\nwendquote} field is filled in later by the function
+{\Tt{}makeFileFormat\nwendquote} based on the requested preferred and min widths.
+
+\nwenddocs{}\nwbegincode{48}\moddef{File display routines}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+static class FieldSpec
+\{
+  Percent preferredWidth;
+  int     minWidth;
+  int     realWidth;
+  
+  this(Percent p, int min) \{
+    preferredWidth = p;
+    minWidth = min;
+  \}
+  
+  string print(in FileList fl, in ViewIndex v) \{
+    assert(0);
+  \}
+\}
+
+static auto name(Percent p, int min)
+\{
+  return new class FieldSpec \{
+    this() \{ super(p, min); \}
+    override string print(in FileList fl, in ViewIndex v)
+    \{
+      auto w = to!string(realWidth);
+      return format("%-" ~ w ~ "." ~ w ~ "s", fl.name(v));
+    \}
+  \};
+\}
+
+static auto line(Percent p, int min)
+\{
+  return new class FieldSpec \{
+    this() \{ super(p, min); \}
+    override string print(in FileList fl, in ViewIndex v)
+    \{
+      auto w = to!string(realWidth);
+      return format("%-" ~ w ~ "d", v);
+    \}
+  \};
+\}
+
+static auto space(int n = 1)
+\{
+  return new class FieldSpec \{
+    this() \{ super(0.percent, n); \}
+    override string print(in FileList fl, in ViewIndex v)
+    \{
+      return " ";
+    \}
+  \};
+\}
+
+static auto selected(string marker)
+\{
+  return new class FieldSpec \{
+    this() \{ super(0.percent, 1); \}
+    override string print(in FileList fl, in ViewIndex v)
+    \{
+      auto selectedp = &fl.isSelected!ViewIndex;
+      return selectedp(v) ? marker : " ";
+    \}
+  \};
+\}
+
+auto fcurrent(string marker)
+\{
+  return new class FieldSpec \{
+    this() \{ super(0.percent, 1); \}
+    override string print(in FileList fl, in ViewIndex v)
+    \{
+      return current == v ? marker : " ";
+    \}
+  \};
+\}
+
+static auto size(Percent p, int min)
+\{
+  return new class FieldSpec \{
+    this() \{ super(p, min); \}
+    override string print(in FileList fl, in ViewIndex v)
+    \{
+      return format("%" ~ to!string(realWidth) ~ "d", fl.size(v));
+    \}
+  \};
+\}
+
+\nwendcode{}\nwbegindocs{49}The main UI stores some state related to the file list such as the
 file list itself, the current file, and the current glob matched file
 in a glob search (which is null if there no glob search has been done
 yet).
 
-\nwenddocs{}\nwbegincode{48}\moddef{MainUI variables}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{50}\moddef{MainUI variables}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 FileList fileList;
 ViewIndex current = ViewIndex(0);
 Nullable!GlobIndex globCurrent;
@@ -695,11 +791,51 @@ bool writeFiles = false;
 FILE* infile;
 FILE* outfile;
 
-\nwendcode{}\nwbegindocs{49}We now define the main UI structure. The {\Tt{}alias\ sink\nwendquote} parameter is
-the sink function that consumes the range of selected files. It is
-called if the user pressed 'q'.
+\nwendcode{}\nwbegindocs{51}The {\Tt{}formatFile\nwendquote} variable stores a {\Tt{}FieldSpec\nwendquote} instance that
+prints all the fields. The function {\Tt{}makeFileFormat\nwendquote} is a helper
+function that can be used to create formatting functions. This
+function accepts a list of {\Tt{}FieldSpec\nwendquote} objects. For example, The
+call {\Tt{}makeFileFormat(\nwendquote}{\Tt{}line(10.percent,\ 5),\nwendquote}{\Tt{}\ name(90.percent,\nwnewline
+20))\nwendquote} creates a file formatter that uses the first 10 percent of line
+width to display the line number and the remaining 90 percent to
+display the file name.
 
-\nwenddocs{}\nwbegincode{50}\moddef{MainUI definition}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{52}\moddef{MainUI variables}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+FieldSpec formatFile;
+
+FieldSpec makeFileFormat(FieldSpec[] args...)
+\{
+  int total;
+
+  foreach (arg; args) \{
+    arg.realWidth = lbound(
+      (arg.preferredWidth.value * fileListWin.width) / 100,
+      arg.minWidth);
+    total += arg.realWidth;
+  \}
+
+  enforce(
+    total <= fileListWin.width,
+    "sf: screen not wide enough to display files."
+  );
+
+  return new class FieldSpec \{
+    this() \{ super(100.percent, fileListWin.width); \}
+    override string print(in FileList fl, in ViewIndex v) \{
+      string result;
+      foreach (arg; args) \{
+        result ~= arg.print(fl, v);
+      \}
+      return result;
+    \}
+  \};
+\}
+
+\nwendcode{}\nwbegindocs{53}We now define the main UI structure. The {\Tt{}alias\ sink\nwendquote} parameter is
+the sink function that consumes the range of selected files. It is
+called if the user pressed 'q' to exit the application.
+
+\nwenddocs{}\nwbegincode{54}\moddef{MainUI definition}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 struct MainUI(alias sink)
 \{
   \LA{}MainUI variables\RA{}
@@ -715,16 +851,33 @@ struct MainUI(alias sink)
     outfile = fopen("/dev/tty", "wb");
     scope (failure) fclose(outfile);
     
-    assert(newterm(cast(char*)null, outfile, infile));
+    enforce(
+      newterm(cast(char*)null, outfile, infile),
+      "sf: Failed to initialize UI."
+    );
+    
     scope (failure) endwin();
     
     // endwin() restores everything if anything follows fails.
     
-    assert(OK == noecho());
-    assert(OK == nonl());
-    assert(ERR != curs_set(0));
+    enforce(
+      OK == noecho() &&
+      OK == nonl()   &&
+      ERR != curs_set(0),
+      "sf: Failed to initialize UI."
+    );
     
     \LA{}Initialize UI components\RA{}
+    
+    formatFile = makeFileFormat(
+                   line(0.percent, 5),
+                   fcurrent(">"),
+                   space(),
+                   selected("*"),
+                   space(),
+                   name(50.percent, 15),
+                   size(15.percent, 10));
+
     reloadPad();
     show();
     loop();
@@ -739,26 +892,29 @@ struct MainUI(alias sink)
                       (fileList.selected));
     \}
   \}
-  
+
   \LA{}show function\RA{}
   \LA{}Echo area functions\RA{}
   \LA{}reloadPad function\RA{}
-
+  \LA{}File display routines\RA{}
   \LA{}loop function\RA{}
 \}
 
-\nwendcode{}\nwbegindocs{51}The echo window can be accessed programmatically in the following
+\nwendcode{}\nwbegindocs{55}The echo window can be accessed programmatically in the following
 ways: The function {\Tt{}readKey\nwendquote} reads a character entered by the user,
 the function {\Tt{}writeChar\nwendquote} writes the character to the current
 position in the echo area taking care of writing past the last
 position in the window, the function {\Tt{}clearEcho\nwendquote} clears the echo
 area.
 
-\nwenddocs{}\nwbegincode{52}\moddef{Echo area functions}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{56}\moddef{Echo area functions}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 auto readKey()
 \{
   dchar c;
-  assert(wget_wch(echoWin.win, &c) == OK);
+  enforce(
+    wget_wch(echoWin.win, &c) == OK,
+    "sf: Failed to initialize UI."
+  );
   return c;
 \}
 
@@ -782,7 +938,7 @@ void pushBackKey(dchar ch)
   unget_wch(ch);
 \}
 
-\nwendcode{}\nwbegindocs{53}Now we describe our command processing loop. The input to the
+\nwendcode{}\nwbegindocs{57}Now we describe our command processing loop. The input to the
 command processor is a stack based programming language. We support
 the following data types: double-quoted strings, single-quote
 preceeded characters, natural numbers, and marks which are positions
@@ -793,7 +949,7 @@ of 1. The variable {\Tt{}top\nwendquote} points to the next empty spot in the
 stack. Notice that all casts in the {\Tt{}set()\nwendquote} are safe as long as we
 do not modify values on the stack.
 
-\nwenddocs{}\nwbegincode{54}\moddef{Data stack definition}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{58}\moddef{Data stack definition}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 static struct DataStack(size_t nelems) \{
   static struct DataStackElem \{
     enum _Type \{ NODATA, NUM, STR, CH, MARK \}
@@ -907,12 +1063,12 @@ alias CH     = SType.CH;
 alias STR    = SType.STR;
 alias NODATA = SType.NODATA;
 
-\nwendcode{}\nwbegindocs{55}The words in the programming language are grouped into data or
+\nwendcode{}\nwbegindocs{59}The words in the programming language are grouped into data or
 commands. The start state can determine the type of the word by only
 looking at the first non-blank character. If it is a " or ' or a
 number, then it's data, otherwise it must be a valid command.
 
-\nwenddocs{}\nwbegincode{56}\moddef{States of the command processor}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{60}\moddef{States of the command processor}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 enum \{
   START,
   READ_CH,
@@ -924,25 +1080,25 @@ enum \{
 
 int state = START;
 
-\nwendcode{}\nwbegindocs{57}The character {\Tt{}c\nwendquote} is used to read the current character input by
+\nwendcode{}\nwbegindocs{61}The character {\Tt{}c\nwendquote} is used to read the current character input by
 the user.
 
-\nwenddocs{}\nwbegincode{58}\moddef{Local variables for command processor}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{62}\moddef{Local variables for command processor}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 dchar c;
 
-\nwendcode{}\nwbegindocs{59}The command processor works in iterations. In each iteration, it
+\nwendcode{}\nwbegindocs{63}The command processor works in iterations. In each iteration, it
 reads a key from the user and forwards the key to the appropriate
 state. The state handles the key and sets the next state. The command
 processor should echo the data item being entered by the user to
 provide feedback.
 
-\nwenddocs{}\nwbegincode{60}\moddef{Setup state for the command processor}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{64}\moddef{Setup state for the command processor}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 c   = cast(dchar)readKey();
 
-\nwendcode{}\nwbegindocs{61}The start state simply looks at the key and delegates to the
+\nwendcode{}\nwbegindocs{65}The start state simply looks at the key and delegates to the
 appropriate state to handle the key.
 
-\nwenddocs{}\nwbegincode{62}\moddef{Start state}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{66}\moddef{Start state}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 case START:
   clearEcho();
   if (c.isWhite) \{
@@ -964,15 +1120,15 @@ case START:
   \}
   break;
 
-\nwendcode{}\nwbegindocs{63}Processing a data item is straight-forward. Simply read it and push
+\nwendcode{}\nwbegindocs{67}Processing a data item is straight-forward. Simply read it and push
 it onto the stack. The variables {\Tt{}n\nwendquote} and {\Tt{}s\nwendquote} are used to keep
 track of the number and string input the user.
 
-\nwenddocs{}\nwbegincode{64}\moddef{Local variables for command processor}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{68}\moddef{Local variables for command processor}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 int n;
 string s;
 
-\nwendcode{}\nwbegincode{65}\moddef{Read data items}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwendcode{}\nwbegincode{69}\moddef{Read data items}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 case READ_CH:
   writeChar(c);
   dataStack.push!CH(c);
@@ -1001,13 +1157,13 @@ case READ_NUM:
   \}
   break;
 
-\nwendcode{}\nwbegindocs{66}Now we process the commands. All commands are single letter
+\nwendcode{}\nwbegindocs{70}Now we process the commands. All commands are single letter
 commands. So we simply have to look at the character, pop the
 appropriate data items from the stack, and update the file list. All
 commands being single letter also allows us to put the state
 transition outside the command handling {\Tt{}switch\nwendquote} statement.
 
-\nwenddocs{}\nwbegincode{67}\moddef{Read commands}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{71}\moddef{Read commands}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 case READ_COMMAND:
   switch (c) \{
     \LA{}Handle commands\RA{}
@@ -1017,20 +1173,20 @@ case READ_COMMAND:
 
 default: assert(0);
 
-\nwendcode{}\nwbegindocs{68}The reverse command.
+\nwendcode{}\nwbegindocs{72}The reverse command.
 
-\nwenddocs{}\nwbegincode{69}\moddef{Handle commands}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{73}\moddef{Handle commands}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 case 'r':
   fileList.reverse(); break;
 
-\nwendcode{}\nwbegindocs{70}Handle motion commands. This part illustrates why mark and number
+\nwendcode{}\nwbegindocs{74}Handle motion commands. This part illustrates why mark and number
 has to be separate data types. If they were the same, any \unix{j} or
 \unix{k} after \unix{m} will consume the pushed mark which is not what
 we would want. The right behaviour is to save the mark until the next
 \unix{;} command (or, more importantly, one of the selection commands
 which uses the mark to specify the range of files).
 
-\nwenddocs{}\nwbegincode{71}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{75}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 case 'j':
   setCurrent(cur + dataStack.pop!NUM().ifNull(1));
   break;
@@ -1049,16 +1205,16 @@ case 'm':
   dataStack.push!MARK(cur);
   break;
 
-\nwendcode{}\nwbegindocs{72}For the selection commands, we first check the stack to see whether
+\nwendcode{}\nwbegindocs{76}For the selection commands, we first check the stack to see whether
 some position is marked. If a mark is present, we select/deselect all
 files from the mark to the current position (both inclusive). If a
 mark is not present, then we select/deselect the current file. The
 range {\Tt{}[beg,\ end)\nwendquote} specifies the files to be selected.
 
-\nwenddocs{}\nwbegincode{73}\moddef{Local variables for command processor}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{77}\moddef{Local variables for command processor}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 int m, beg, end;
 
-\nwendcode{}\nwbegincode{74}\moddef{Obtain range of files}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwendcode{}\nwbegincode{78}\moddef{Obtain range of files}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 m = dataStack.pop!MARK().ifNull(cur);
 
 if (m > cur) \{
@@ -1069,7 +1225,7 @@ if (m > cur) \{
   end = cur + 1;
 \}
 
-\nwendcode{}\nwbegincode{75}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwendcode{}\nwbegincode{79}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 case 's':
   \LA{}Obtain range of files\RA{}
   foreach (v; beg .. end) \{
@@ -1095,10 +1251,10 @@ case 't':
   \}
   break;
 
-\nwendcode{}\nwbegindocs{76}The sort command accepts an argument on the stack that specifies the
+\nwendcode{}\nwbegindocs{80}The sort command accepts an argument on the stack that specifies the
 sort field. We use the file name as the default sort field.
 
-\nwenddocs{}\nwbegincode{77}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{81}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 case 'a':
   auto sortarg = dataStack.pop!CH().ifNull(dchar('n'));
   switch (sortarg) \{
@@ -1113,11 +1269,11 @@ case 'a':
   \}
   break;
 
-\nwendcode{}\nwbegindocs{78}The glob command simply delegates the actual glob search to the
+\nwendcode{}\nwbegindocs{82}The glob command simply delegates the actual glob search to the
 underlying file list. The main work is to maintain {\Tt{}globCurrent\nwendquote} and
 {\Tt{}current\nwendquote}.
 
-\nwenddocs{}\nwbegincode{79}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{83}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 case 'g':
   string globarg = dataStack.pop!STR().ifNull("");
   fileList.glob(globarg);
@@ -1155,21 +1311,25 @@ case 'N':
   state = START;
   break;
 
-\nwendcode{}\nwbegindocs{80}Quit command.
+\nwendcode{}\nwbegindocs{84}Quit command.
 
-\nwenddocs{}\nwbegincode{81}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{85}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 case 'q':
   writeFiles = true;
   goto quit;
 
-\nwendcode{}\nwbegincode{82}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+case 'Q':
+  writeFiles = false;
+  goto quit;
+
+\nwendcode{}\nwbegincode{86}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 default: break; // Unknown command letter.
 
-\nwendcode{}\nwbegindocs{83}We define some commands to manipulate the data stack. The peek
+\nwendcode{}\nwbegindocs{87}We define some commands to manipulate the data stack. The peek
 command prints the top stack element in the echo area. The pop command
 pops the top stack element.
 
-\nwenddocs{}\nwbegincode{84}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{88}\moddef{Handle commands}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 case 'p':
   clearEcho();
   auto top = dataStack.peek();
@@ -1181,10 +1341,10 @@ case 'P':
   dataStack.popAny();
   break;
 
-\nwendcode{}\nwbegindocs{85}The following are convenience functions used by our command
+\nwendcode{}\nwbegindocs{89}The following are convenience functions used by our command
 processor.
 
-\nwenddocs{}\nwbegincode{86}\moddef{Convenience functions for command processor}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{90}\moddef{Convenience functions for command processor}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 void setCurrent(in int newcur)
 \{
   alias VI = ViewIndex;
@@ -1215,9 +1375,9 @@ static int charToInt(in dchar c)
   return c - '0';
 \}
 
-\nwendcode{}\nwbegindocs{87}Finally, we put everything together to make our command processor.
+\nwendcode{}\nwbegindocs{91}Finally, we put everything together to make our command processor.
 
-\nwenddocs{}\nwbegincode{88}\moddef{loop function}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{92}\moddef{loop function}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 void loop()
 \{
   \LA{}Convenience functions for command processor\RA{}
@@ -1238,7 +1398,7 @@ void loop()
 quit: return;
 \}
 
-\nwendcode{}\nwbegindocs{89}We will now describe our main redrawing logic. The current file has
+\nwendcode{}\nwbegindocs{93}We will now describe our main redrawing logic. The current file has
 to be displayed always. If the file list window has $n$ lines, then we
 have to determine the appropriate $n$ files to reload into the file
 list pad and project on to the window. We keep track of the view index
@@ -1253,10 +1413,10 @@ the screen. If the user has scrolled up too far, then we arrange
 things so that the current file is displayed approximately 4/5 from
 the end of the screen.
 
-\nwenddocs{}\nwbegincode{90}\moddef{MainUI variables}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{94}\moddef{MainUI variables}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 ViewIndex first = ViewIndex(0);
 
-\nwendcode{}\nwbegincode{91}\moddef{Display the appropriate portion of file list pad}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwendcode{}\nwbegincode{95}\moddef{Display the appropriate portion of file list pad}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 int nlines = fileListWin.height;
 
 if (current < first) \{
@@ -1271,10 +1431,10 @@ ViewIndex last = ViewIndex(
 reloadPad(iota(first, last));
 show();
 
-\nwendcode{}\nwbegindocs{92}Now we will write some output routines that print the files selected
+\nwendcode{}\nwbegindocs{96}Now we will write some output routines that print the files selected
 into standard output in various common formats.
 
-\nwenddocs{}\nwbegincode{93}\moddef{Output routines}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{97}\moddef{Output routines}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 void printn(R)(R files)
 \{
   foreach (f; files) writeln(f);
@@ -1296,9 +1456,9 @@ void printz(R)(R files)
   \}
 \}
 
-\nwendcode{}\nwbegindocs{94}Our application.
+\nwendcode{}\nwbegindocs{98}Our application.
 
-\nwenddocs{}\nwbegincode{95}\moddef{sf.d}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{99}\moddef{sf.d}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 \LA{}Import statements\RA{}
 \LA{}Definitions for index and array types\RA{}
 \LA{}Convenience functions\RA{}
@@ -1310,9 +1470,9 @@ void printz(R)(R files)
 void main(string[] args)
 \{
   enum OutputFormat \{
-  n, // One file per-line. Assumes no newlines in filenames.
-  q, // double-quoted separated by spaces.
-  z, // separated by null bytes.
+  n,
+  q,
+  z,
   \}
 
   OutputFormat outFormat = OutputFormat.n;
@@ -1348,20 +1508,24 @@ sf <options> -: Select files from the list of files in standard input.",
     "sf: Failed to load file list."
   );
 
-  final switch (outFormat) \{
-  case OutputFormat.n:
-    MainUI!printn(fl);
-    break;
-  case OutputFormat.q:
-    MainUI!printq(fl);
-    break;
-  case OutputFormat.z:
-    MainUI!printz(fl);
-    break;
+  try \{
+    final switch (outFormat) \{
+    case OutputFormat.n:
+      MainUI!printn(fl);
+      break;
+    case OutputFormat.q:
+      MainUI!printq(fl);
+      break;
+    case OutputFormat.z:
+      MainUI!printz(fl);
+      break;
+    \}
+  \} catch (Exception e) \{
+    stderr.writeln(e.msg);
   \}
 \}
 
-\nwendcode{}\nwbegincode{96}\moddef{Import statements}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwendcode{}\nwbegincode{100}\moddef{Import statements}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 import std.string    : toStringz;
 import std.stdio     : writeln, write, stderr, stdin;
 import std.format    : format;
@@ -1377,6 +1541,7 @@ import std.ascii     : isWhite, isDigit;
 import std.typecons  : Nullable;
 import std.getopt    : defaultGetoptPrinter, getopt, config;
 import std.conv      : to, dtext;
+import std.exception : enforce;
 
 import core.stdc.stdlib : exit, malloc, free;
 import core.stdc.stdio  : FILE, fopen, fclose;
@@ -1385,7 +1550,7 @@ import core.stdc.locale : setlocale, LC_ALL;
 import algo = std.algorithm;
 import deimos.ncurses;
 
-\nwendcode{}\nwbegindocs{97}Now we define the various index and array types. The type
+\nwendcode{}\nwbegindocs{101}Now we define the various index and array types. The type
 {\Tt{}indexType!(s)\nwendquote}, where {\Tt{}s\nwendquote} is a literal string, is a distinct
 index type for distinct strings. We disallow the possibility of mixing
 up conceptually distinct index types by overloading assignment in
@@ -1396,7 +1561,7 @@ the special index types. This is useful to interface with standard
 library functions which expects all random access ranges to be
 indexable using {\Tt{}size{\_}t\nwendquote}.
 
-\nwenddocs{}\nwbegincode{98}\moddef{Definitions for index and array types}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{102}\moddef{Definitions for index and array types}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 struct Index(string cookie)
 \{
   size_t i_;
@@ -1413,9 +1578,9 @@ struct Index(string cookie)
   \}
 \}
 
-\nwendcode{}\nwbegindocs{99}We will also allow to convert an index into an {\Tt{}int\nwendquote}.
+\nwendcode{}\nwbegindocs{103}We will also allow to convert an index into an {\Tt{}int\nwendquote}.
 
-\nwenddocs{}\nwbegincode{100}\moddef{Definitions for index and array types}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{104}\moddef{Definitions for index and array types}\plusendmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 int toInt(T : Index!s, alias s)(in T x)
 \{
   return cast(int)x;
@@ -1500,9 +1665,9 @@ auto vanillaIndexed(R)(R r)
   return VanillaIndexed!(R)(r);
 \}
 
-\nwendcode{}\nwbegindocs{101}Some convenience functions.
+\nwendcode{}\nwbegindocs{105}Some convenience functions.
 
-\nwenddocs{}\nwbegincode{102}\moddef{Convenience functions}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwenddocs{}\nwbegincode{106}\moddef{Convenience functions}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 auto ifNull(T : Nullable!U, U)(in T x, in U d)
 \{
   return x.isNull ? d : x.get;
@@ -1538,7 +1703,7 @@ auto quitOnError(E)(lazy E expr, in string msg)
       return result;
     \}
   \} catch (Exception e) \{
-    stderr.writeln (msg);
+    stderr.writeln(msg);
     exit(1);
   \}
   assert(0);
@@ -1555,10 +1720,21 @@ auto dstringz(string s)
   return r;
 \}
 
+struct Percent
+\{
+  int value;
+\}
 
-\nwendcode{}\nwbegindocs{103}Some useful aliases.
+auto percent(int val)
+\{
+  assert(0 <= val && val <= 100,
+         "Invalid percentage value.");
+  return Percent(val);
+\}
 
-\nwenddocs{}\nwbegincode{104}\moddef{Useful aliases}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
+\nwendcode{}\nwbegindocs{107}Some useful aliases.
+
+\nwenddocs{}\nwbegincode{108}\moddef{Useful aliases}\endmoddef\nwstartdeflinemarkup\nwenddeflinemarkup
 alias FileList.ViewIndex ViewIndex;
 alias FileList.FileIndex FileIndex;
 alias FileList.GlobIndex GlobIndex;
@@ -1571,7 +1747,7 @@ alias GLOB     = FileList.SortField.GLOB;
 alias SELECT   = FileList.SortField.SELECT;
 alias FILETYPE = FileList.SortField.FILETYPE;
 
-\nwendcode{}\nwbegindocs{105}\section*{Some implementation notes} There are many casts from
+\nwendcode{}\nwbegindocs{109}\section*{Some implementation notes} There are many casts from
 unsigned long to int in the program. These do not check for integer
 overflow.
 
