@@ -831,17 +831,29 @@ FieldSpec makeFileFormat(FieldSpec[] args...)
   };
 }
 
-@ We now define the main UI structure. The [[alias sink]] parameter is
-the sink function that consumes the range of selected files. It is
-called if the user pressed 'q' to exit the application.
+@ The variable [[sink]] is the sink function that consumes the range
+of selected files. It is called if the user pressed 'q' to exit the
+application.
+
+<<MainUI variables>>=
+alias SinkType =
+  void function(InputRange!(const(string)) files);
+SinkType sink;
+
+@ Now we define the [[MainUI]] structure. Constructing a MainUI object
+starts the UI. The [[FileList]] and [[SinkType]] parameters are the
+file list that the UI should display and the function to call to
+output the selected files. The UI is teared down when the destructor
+is called.
 
 <<MainUI definition>>=
-struct MainUI(alias sink)
+struct MainUI
 {
   <<MainUI variables>>
   
-  this(FileList fl) {
+  this(FileList fl, SinkType s) {
     fileList = fl;
+    sink     = s;
 
     setlocale(LC_ALL, "");
 
@@ -870,13 +882,14 @@ struct MainUI(alias sink)
     <<Initialize UI components>>
 
     formatFile = makeFileFormat(
-                   line(0.percent, 5),
-                   fcurrent(">"),
-		   space(),
-		   selected("*"),
-		   space(),
-                   name(50.percent, 15),
-		   size(15.percent, 10));
+      line(0.percent, 5),
+      fcurrent(">"),
+      space(),
+      selected("*"),
+      space(),
+      name(50.percent, 15),
+      size(15.percent, 10)
+    );
 
     reloadPad();
     show();
@@ -888,8 +901,11 @@ struct MainUI(alias sink)
     fclose(infile);
     fclose(outfile);
     if (writeFiles) {
-        sink(algo.map!(f => fileList.path(f))
-	              (fileList.selected));
+        sink(inputRangeObject(
+	       algo.map!(f => fileList.path(f))
+	                (fileList.selected)
+	     )
+	);
     }
   }
 
@@ -986,11 +1002,11 @@ static struct DataStack(size_t nelems) {
 
     string toString() const {
       final switch (type) {
-      case NUM:    return to!string(num);
-      case STR:    return "\"" ~ to!string(str) ~ "\"";
-      case CH:     return "\'" ~ to!string(ch);
-      case MARK:   return to!string(num) ~ "m";
-      case NODATA: assert(0);
+      case _Type.NUM:    return to!string(num);
+      case _Type.STR:    return "\"" ~ to!string(str) ~ "\"";
+      case _Type.CH:     return "\'" ~ to!string(ch);
+      case _Type.MARK:   return to!string(num) ~ "m";
+      case _Type.NODATA: assert(0);
       }
     }
   }
@@ -1435,12 +1451,14 @@ show();
 into standard output in various common formats.
 
 <<Output routines>>=
-void printn(R)(R files)
+alias IRS = InputRange!(const(string));
+
+void printn(IRS files)
 {
   foreach (f; files) writeln(f);
 }
 
-void printq(R)(R files)
+void printq(IRS files)
 {
   foreach (f; files) {
     write("\""); write(f); write("\"");
@@ -1448,7 +1466,7 @@ void printq(R)(R files)
   }
 }
 
-void printz(R)(R files)
+void printz(IRS files)
 {
   foreach (f; files) {
     write(f);
@@ -1508,18 +1526,20 @@ sf <options> -: Select files from the list of files in standard input.",
     "sf: Failed to load file list."
   );
 
-  try {
+  auto sink = 
+  {
     final switch (outFormat) {
     case OutputFormat.n:
-      MainUI!printn(fl);
-      break;
+      return &printn;
     case OutputFormat.q:
-      MainUI!printq(fl);
-      break;
+      return &printq;
     case OutputFormat.z:
-      MainUI!printz(fl);
-      break;
+      return &printz;
     }
+  }();
+
+  try {
+    MainUI(fl, sink);
   } catch (Exception e) {
     stderr.writeln(e.msg);
   }
@@ -1535,7 +1555,7 @@ import std.path      : baseName, extension, globMatch;
 import std.traits    : isAssignable, TemplateOf;
 import std.range     : isInputRange, isRandomAccessRange,
                        ElementType, hasSlicing, hasLength,
-		       iota;
+		       iota, InputRange, inputRangeObject;
 import std.array     : array;
 import std.ascii     : isWhite, isDigit;
 import std.typecons  : Nullable;
