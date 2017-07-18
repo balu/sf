@@ -1,0 +1,7 @@
+.dub/
+doc/sf.aux
+doc/sf.fdb_latexmk
+doc/sf.fls
+doc/sf.log
+doc/sf.tex~
+sf

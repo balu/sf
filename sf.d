@@ -828,7 +828,7 @@ free(ncline);
 #line 915 "sf.nw"
   
 #line 696 "sf.nw"
-static class FieldSpec
+private static class FieldSpec
 {
   Percent preferredWidth;
   int     minWidth;
@@ -844,7 +844,7 @@ static class FieldSpec
   }
 }
 
-static auto name(Percent p, int min)
+private static auto name(Percent p, int min)
 {
   return new class FieldSpec {
     this() { super(p, min); }
@@ -856,7 +856,7 @@ static auto name(Percent p, int min)
   };
 }
 
-static auto line(Percent p, int min)
+private static auto line(Percent p, int min)
 {
   return new class FieldSpec {
     this() { super(p, min); }
@@ -868,7 +868,7 @@ static auto line(Percent p, int min)
   };
 }
 
-static auto space(int n = 1)
+private static auto space(int n = 1)
 {
   return new class FieldSpec {
     this() { super(0.percent, n); }
@@ -879,7 +879,7 @@ static auto space(int n = 1)
   };
 }
 
-static auto selected(string marker)
+private static auto selected(string marker)
 {
   return new class FieldSpec {
     this() { super(0.percent, 1); }
@@ -891,7 +891,7 @@ static auto selected(string marker)
   };
 }
 
-auto fcurrent(string marker)
+private auto fcurrent(string marker)
 {
   return new class FieldSpec {
     this() { super(0.percent, 1); }
@@ -902,7 +902,7 @@ auto fcurrent(string marker)
   };
 }
 
-static auto size(Percent p, int min)
+private static auto size(Percent p, int min)
 {
   return new class FieldSpec {
     this() { super(p, min); }
