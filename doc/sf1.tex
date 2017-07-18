@@ -191,11 +191,11 @@ private \{
   SafeRange!(FileImpl[],  FileIndex) list_;
   SafeRange!(FileIndex[], ViewIndex) file_;
   SafeRange!(ViewIndex[], FileIndex) view_;
-  alias list_ this;
-
   SafeRange!(FileIndex[], GlobIndex) glob_;
   SafeRange!(bool[], FileIndex)      selected_;
 \}
+
+alias list_ this;
 
 \nwendcode{}\nwbegindocs{7}For safe iteration over the files in the file list, we allow the
 user to use {\Tt{}foreach\nwendquote} to iterate over the files using {\Tt{}ViewIndex\nwendquote}.
@@ -476,18 +476,14 @@ static FileList loadDirectory(in string path)
   FileList result;
 
   auto files = dirEntries(path, SpanMode.shallow);
-  while (!files.empty) \{ // nothrow?
-    auto f = files.front; // nothrow?
-    try \{
-      result.list_ ~= FileImpl(f);
-    \} catch (Exception e) \{
-      stderr.writeln("sf: Failed to load ", f.name);
-    \} finally \{
-      quitOnError(
-        files.popFront,
-        "sf: Failed to iterate directory " ~ path);
-    \}
+
+  foreach (f; files) \{
+    continueOnError(
+      \{ result.list_ ~= FileImpl(f); \}(),
+      "sf: Failed to load " ~ f.name
+    );
   \}
+
   \LA{}Initialize rest of FileList result\RA{}
   return result;
 \}
@@ -503,11 +499,10 @@ static FileList fromPaths(in string[] paths)
   result.list_.reserve(paths.length);
 
   foreach (p; paths) \{
-    try \{
-      result.list_ ~= FileImpl(p);
-    \} catch (Exception e) \{
-      stderr.writeln("sf: Failed to load ", p);
-    \}
+    continueOnError(
+      \{ result.list_ ~= FileImpl(p); \}(),
+      "sf: Failed to load " ~ p
+    );
   \}
   \LA{}Initialize rest of FileList result\RA{}
   return result;
@@ -1494,18 +1489,24 @@ void main(string[] args)
   \}
 
   OutputFormat outFormat = OutputFormat.n;
+
+  auto ohelp = r"Output format
+    n - One file per-line. Assumes there are no newlines in filenames. (default)
+    q - Double-quoted, separated by spaces.
+    z - Separated by null bytes.";
+
+  auto proghelp =
+  r"sf <options> [<dir>]: Select files from <dir> or current directory.
+sf <options> -: Select files from the list of files in standard input.";
+
   auto helpInformation =
     getopt(args,
      config.passThrough,
-     "output|o", r"Output format
-    n - One file per-line. Assumes there are no newlines in filenames. (default)
-    q - Double-quoted, separated by spaces.
-    z - Separated by null bytes.", &outFormat
+     "output|o", ohelp, &outFormat
     );
+
   if (helpInformation.helpWanted) \{
-    defaultGetoptPrinter(
-      r"sf <options> [<dir>]: Select files from <dir> or current directory.
-sf <options> -: Select files from the list of files in standard input.",
+    defaultGetoptPrinter(proghelp,
       helpInformation.options);
     return;
   \}
@@ -1525,6 +1526,9 @@ sf <options> -: Select files from the list of files in standard input.",
     \}(),
     "sf: Failed to load file list."
   );
+
+  quitIf(fl.length == 0,
+         "sf: No files to select.");
 
   auto sink = 
   \{
@@ -1712,7 +1716,15 @@ auto ubound(int val, int max)
   return val;
 \}
 
-auto quitOnError(E)(lazy E expr, in string msg)
+auto quitIf(bool check, lazy string msg)
+\{
+  if (check) \{
+    stderr.writeln(msg);
+    exit(1);
+  \}
+\}
+
+auto quitOnError(E)(lazy E expr, lazy string msg)
 \{
   try \{
     static if (is(E == void)) \{
@@ -1727,6 +1739,22 @@ auto quitOnError(E)(lazy E expr, in string msg)
     exit(1);
   \}
   assert(0);
+\}
+
+auto continueOnError(E)(lazy E expr, lazy string msg)
+\{
+  try \{
+    static if (is(E == void)) \{
+      expr();
+      return;
+    \} else \{
+      auto result = expr();
+      return result;
+    \}
+  \} catch (Exception e) \{
+    // Ignore exception.
+    stderr.writeln(msg);
+  \}
 \}
 
 auto dstringz(string s)
