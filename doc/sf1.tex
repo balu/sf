@@ -349,8 +349,8 @@ void sort(SortField sf)()
   if (sf == SELECT)
 \{
   auto s = &this.isSelected!FileIndex;
-  algo.partition!(s)(vanillaIndexed(file_));
-  algo.partition!(s)(vanillaIndexed(glob_));
+  algo.partition!(s, algo.SwapStrategy.stable)(vanillaIndexed(file_));
+  algo.partition!(s, algo.SwapStrategy.stable)(vanillaIndexed(glob_));
   fixupView();
 \}
 
@@ -389,8 +389,8 @@ void sort(SortField sf)()
       sf == SIZE)
 \{
   auto less   = &this.fileLess!sf;
-  algo.sort!(less)(vanillaIndexed(file_));
-  algo.sort!(less)(vanillaIndexed(glob_));
+  algo.sort!(less, algo.SwapStrategy.stable)(vanillaIndexed(file_));
+  algo.sort!(less, algo.SwapStrategy.stable)(vanillaIndexed(glob_));
   fixupView();
 \}
 
