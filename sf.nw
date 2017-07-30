@@ -711,7 +711,8 @@ private static auto name(Percent p, int min)
     override string print(in FileList fl, in ViewIndex v)
     {
       auto w = to!string(realWidth);
-      return format("%-" ~ w ~ "." ~ w ~ "s", fl.name(v));
+      return format("%-" ~ w ~ "." ~ w ~ "s",
+                    sanitize(fl.name(v)));
     }
   };
 }
@@ -1566,6 +1567,7 @@ import std.typecons  : Nullable;
 import std.getopt    : defaultGetoptPrinter, getopt, config;
 import std.conv      : to, dtext;
 import std.exception : enforce;
+import std.encoding  : sanitize;
 
 import core.stdc.stdlib : exit, malloc, free;
 import core.stdc.stdio  : FILE, fopen, fclose;
