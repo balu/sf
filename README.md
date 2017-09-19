@@ -1,6 +1,6 @@
 Demo
 
-[Imgur](https://i.imgur.com/wI9XYXg.gifv)
+![](https://github.com/balu/sf/blob/master/sfdemo.gif?raw=true)
 
 Download
 
