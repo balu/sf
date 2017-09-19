@@ -1,6 +1,6 @@
 Demo
 
-![](https://i.imgur.com/wI9XYXg.gifv)
+[Imgur](https://i.imgur.com/wI9XYXg.gifv)
 
 Download
 
