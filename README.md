@@ -1,3 +1,7 @@
+Demo
+
+![gif](https://imgur.com/a/XVQpC)
+
 Download
 
 > dub fetch sf
