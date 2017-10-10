@@ -1,4 +1,4 @@
-#line 1554 "sf.nw"
+#line 1555 "sf.nw"
 import std.string    : toStringz;
 import std.stdio     : writeln, write, stderr, stdin;
 import std.format    : format;
@@ -24,7 +24,7 @@ import core.stdc.locale : setlocale, LC_ALL;
 import algo = std.algorithm;
 import deimos.ncurses;
 
-#line 1591 "sf.nw"
+#line 1592 "sf.nw"
 struct Index(string cookie)
 {
   size_t i_;
@@ -41,7 +41,7 @@ struct Index(string cookie)
   }
 }
 
-#line 1610 "sf.nw"
+#line 1611 "sf.nw"
 int toInt(T : Index!s, alias s)(in T x)
 {
   return cast(int)x;
@@ -126,7 +126,7 @@ auto vanillaIndexed(R)(R r)
   return VanillaIndexed!(R)(r);
 }
 
-#line 1697 "sf.nw"
+#line 1698 "sf.nw"
 auto ifNull(T : Nullable!U, U)(in T x, in U d)
 {
   return x.isNull ? d : x.get;
@@ -568,7 +568,7 @@ if (result.list_.length > 0) {
 #line 540 "sf.nw"
 }
 
-#line 1788 "sf.nw"
+#line 1789 "sf.nw"
 alias FileList.ViewIndex ViewIndex;
 alias FileList.FileIndex FileIndex;
 alias FileList.GlobIndex GlobIndex;
@@ -643,7 +643,7 @@ alias SinkType =
   void function(InputRange!(const(string)) files);
 SinkType sink;
 
-#line 1429 "sf.nw"
+#line 1430 "sf.nw"
 ViewIndex first = ViewIndex(0);
 
 #line 849 "sf.nw"
@@ -936,11 +936,11 @@ private static auto size(Percent p, int min)
 
 #line 912 "sf.nw"
   
-#line 1393 "sf.nw"
+#line 1394 "sf.nw"
 void loop()
 {
   
-#line 1360 "sf.nw"
+#line 1361 "sf.nw"
 void setCurrent(in int newcur)
 {
   alias VI = ViewIndex;
@@ -971,7 +971,7 @@ static int charToInt(in dchar c)
   return c - '0';
 }
 
-#line 1396 "sf.nw"
+#line 1397 "sf.nw"
   
 #line 1099 "sf.nw"
 dchar c;
@@ -983,7 +983,7 @@ string s;
 #line 1227 "sf.nw"
 int m, beg, end;
 
-#line 1397 "sf.nw"
+#line 1398 "sf.nw"
   
 #line 965 "sf.nw"
 static struct DataStack(size_t nelems) {
@@ -1099,7 +1099,7 @@ alias CH     = SType.CH;
 alias STR    = SType.STR;
 alias NODATA = SType.NODATA;
 
-#line 1398 "sf.nw"
+#line 1399 "sf.nw"
   
 #line 1084 "sf.nw"
 enum {
@@ -1114,13 +1114,13 @@ enum {
 int state = START;
 
 
-#line 1400 "sf.nw"
+#line 1401 "sf.nw"
   while (true) {
     
 #line 1108 "sf.nw"
 c   = cast(dchar)readKey();
 
-#line 1402 "sf.nw"
+#line 1403 "sf.nw"
     switch(state) {
       
 #line 1114 "sf.nw"
@@ -1145,7 +1145,7 @@ case START:
   }
   break;
 
-#line 1404 "sf.nw"
+#line 1405 "sf.nw"
       
 #line 1144 "sf.nw"
 case READ_CH:
@@ -1176,7 +1176,7 @@ case READ_NUM:
   }
   break;
 
-#line 1405 "sf.nw"
+#line 1406 "sf.nw"
       
 #line 1179 "sf.nw"
 case READ_COMMAND:
@@ -1286,6 +1286,7 @@ case 'a':
 case 'g':
   string globarg = dataStack.pop!STR().ifNull("");
   fileList.glob(globarg);
+  globCurrent.nullify;
   if (fileList.globMatches) {
     setGlobCurrent(0);
     setCurrent(
@@ -1320,7 +1321,7 @@ case 'N':
   state = START;
   break;
 
-#line 1329 "sf.nw"
+#line 1330 "sf.nw"
 case 'q':
   writeFiles = true;
   goto quit;
@@ -1329,10 +1330,10 @@ case 'Q':
   writeFiles = false;
   goto quit;
 
-#line 1338 "sf.nw"
+#line 1339 "sf.nw"
 default: break; // Unknown command letter.
 
-#line 1345 "sf.nw"
+#line 1346 "sf.nw"
 case 'p':
   clearEcho();
   auto top = dataStack.peek();
@@ -1351,10 +1352,10 @@ case 'P':
 
 default: assert(0);
 
-#line 1406 "sf.nw"
+#line 1407 "sf.nw"
     }
     
-#line 1432 "sf.nw"
+#line 1433 "sf.nw"
 int nlines = fileListWin.height;
 
 if (current < first) {
@@ -1369,7 +1370,7 @@ ViewIndex last = ViewIndex(
 reloadPad(iota(first, last));
 show();
 
-#line 1408 "sf.nw"
+#line 1409 "sf.nw"
   }
 
 quit: return;
@@ -1378,7 +1379,7 @@ quit: return;
 #line 913 "sf.nw"
 }
 
-#line 1450 "sf.nw"
+#line 1451 "sf.nw"
 alias IRS = InputRange!(const(string));
 
 void printn(IRS files)
@@ -1403,7 +1404,7 @@ void printz(IRS files)
 }
 
 
-#line 1484 "sf.nw"
+#line 1485 "sf.nw"
 void main(string[] args)
 {
   enum OutputFormat {

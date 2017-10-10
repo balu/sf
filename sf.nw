@@ -1289,6 +1289,7 @@ underlying file list. The main work is to maintain [[globCurrent]] and
 case 'g':
   string globarg = dataStack.pop!STR().ifNull("");
   fileList.glob(globarg);
+  globCurrent.nullify;
   if (fileList.globMatches) {
     setGlobCurrent(0);
     setCurrent(
