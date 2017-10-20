@@ -195,7 +195,10 @@ private {
   SafeRange!(bool[], FileIndex)      selected_;
 }
 
-alias list_ this;
+@property auto length() const
+{
+  return list_.length;
+}
 
 @ For safe iteration over the files in the file list, we allow the
 user to use [[foreach]] to iterate over the files using [[ViewIndex]].
