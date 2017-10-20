@@ -1093,23 +1093,6 @@ enum {
   QUIT
 }
 
-int state = START;
-
-@ The character [[c]] is used to read the current character input by
-the user.
-
-<<Local variables for command processor>>=
-dchar c;
-
-@ The command processor works in iterations. In each iteration, it
-reads a key from the user and forwards the key to the appropriate
-state. The state handles the key and sets the next state. The command
-processor should echo the data item being entered by the user to
-provide feedback.
-
-<<Setup state for the command processor>>=
-c   = cast(dchar)readKey();
-
 @ The start state simply looks at the key and delegates to the
 appropriate state to handle the key.
 
@@ -1226,44 +1209,20 @@ files from the mark to the current position (both inclusive). If a
 mark is not present, then we select/deselect the current file. The
 range [[[beg, end)]] specifies the files to be selected.
 
-<<Local variables for command processor>>=
-int m, beg, end;
-
-<<Obtain range of files>>=
-m = dataStack.pop!MARK().ifNull(cur);
-
-if (m > cur) {
-  beg = cur;
-  end = m + 1;
-} else {
-  beg = m;
-  end = cur + 1;
-}
-
 <<Handle commands>>=
 case 's':
-  <<Obtain range of files>>
-  foreach (v; beg .. end) {
-    auto v1 = ViewIndex(v);
-    fileList.select(v1);
-  }
+  onMarkedFiles(v => fileList.select(v));
   break;
 case 'S':
-  <<Obtain range of files>>
-  foreach (v; beg .. end) {
-    auto v1 = ViewIndex(v);
-    fileList.deselect(v1);
-  }
+  onMarkedFiles(v => fileList.deselect(v));
   break;
 case 't':
-  <<Obtain range of files>>
-  foreach (v; beg .. end) {
-    auto v1 = ViewIndex(v);
-    if (fileList.isSelected(v1))
-      fileList.deselect(v1);
+  onMarkedFiles(v => {
+    if (fileList.isSelected(v))
+      fileList.deselect(v);
     else
-      fileList.select(v1);
-  }
+      fileList.select(v);
+    }());
   break;
 
 @ The sort command accepts an argument on the stack that specifies the
@@ -1391,18 +1350,38 @@ static int charToInt(in dchar c)
   return c - '0';
 }
 
+void onMarkedFiles(scope void delegate(ViewIndex v) dg)
+{
+  int m = dataStack.pop!MARK().ifNull(cur);
+  int beg, end;
+  if (m > cur) {
+    beg = cur;
+    end = m + 1;
+  } else {
+    beg = m;
+    end = cur + 1;
+  }
+
+  foreach (v; beg .. end)
+  {
+    dg(ViewIndex(v));
+  }
+}
+
 @ Finally, we put everything together to make our command processor.
 
 <<loop function>>=
 void loop()
 {
-  <<Convenience functions for command processor>>
   <<Local variables for command processor>>
   <<Data stack definition>>
   <<States of the command processor>>
+  <<Convenience functions for command processor>>
 
+  int state = START;
+  dchar c;
   while (true) {
-    <<Setup state for the command processor>>
+    c = cast(dchar)readKey();
     switch(state) {
       <<Start state>>
       <<Read data items>>

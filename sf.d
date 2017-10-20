@@ -1,4 +1,4 @@
-#line 1558 "sf.nw"
+#line 1537 "sf.nw"
 import std.string    : toStringz;
 import std.stdio     : writeln, write, stderr, stdin;
 import std.format    : format;
@@ -24,7 +24,7 @@ import core.stdc.locale : setlocale, LC_ALL;
 import algo = std.algorithm;
 import deimos.ncurses;
 
-#line 1595 "sf.nw"
+#line 1574 "sf.nw"
 struct Index(string cookie)
 {
   size_t i_;
@@ -41,7 +41,7 @@ struct Index(string cookie)
   }
 }
 
-#line 1614 "sf.nw"
+#line 1593 "sf.nw"
 int toInt(T : Index!s, alias s)(in T x)
 {
   return cast(int)x;
@@ -126,7 +126,7 @@ auto vanillaIndexed(R)(R r)
   return VanillaIndexed!(R)(r);
 }
 
-#line 1701 "sf.nw"
+#line 1680 "sf.nw"
 auto ifNull(T : Nullable!U, U)(in T x, in U d)
 {
   return x.isNull ? d : x.get;
@@ -571,7 +571,7 @@ if (result.list_.length > 0) {
 #line 543 "sf.nw"
 }
 
-#line 1792 "sf.nw"
+#line 1771 "sf.nw"
 alias FileList.ViewIndex ViewIndex;
 alias FileList.FileIndex FileIndex;
 alias FileList.GlobIndex GlobIndex;
@@ -646,7 +646,7 @@ alias SinkType =
   void function(InputRange!(const(string)) files);
 SinkType sink;
 
-#line 1433 "sf.nw"
+#line 1412 "sf.nw"
 ViewIndex first = ViewIndex(0);
 
 #line 852 "sf.nw"
@@ -939,54 +939,15 @@ private static auto size(Percent p, int min)
 
 #line 915 "sf.nw"
   
-#line 1397 "sf.nw"
+#line 1374 "sf.nw"
 void loop()
 {
   
-#line 1364 "sf.nw"
-void setCurrent(in int newcur)
-{
-  alias VI = ViewIndex;
-  current = VI(bound(
-                 newcur,
-                 0,
-                 cast(int)fileList.length - 1));
-}
-
-@property
-int cur()
-{
-  return toInt(current);
-}
-
-void setGlobCurrent(in int newcur)
-{
-  alias GI = GlobIndex;
-  globCurrent = GI(bound(
-                 newcur,
-                 0,
-                 cast(int)fileList.globMatches - 1));
-}
-
-static int charToInt(in dchar c)
-{
-  assert(c.isDigit);
-  return c - '0';
-}
-
-#line 1400 "sf.nw"
-  
-#line 1102 "sf.nw"
-dchar c;
-
-#line 1143 "sf.nw"
+#line 1126 "sf.nw"
 int n;
 string s;
 
-#line 1230 "sf.nw"
-int m, beg, end;
-
-#line 1401 "sf.nw"
+#line 1377 "sf.nw"
   
 #line 968 "sf.nw"
 static struct DataStack(size_t nelems) {
@@ -1102,7 +1063,7 @@ alias CH     = SType.CH;
 alias STR    = SType.STR;
 alias NODATA = SType.NODATA;
 
-#line 1402 "sf.nw"
+#line 1378 "sf.nw"
   
 #line 1087 "sf.nw"
 enum {
@@ -1114,19 +1075,66 @@ enum {
   QUIT
 }
 
-int state = START;
+#line 1379 "sf.nw"
+  
+#line 1323 "sf.nw"
+void setCurrent(in int newcur)
+{
+  alias VI = ViewIndex;
+  current = VI(bound(
+                 newcur,
+                 0,
+                 cast(int)fileList.length - 1));
+}
+
+@property
+int cur()
+{
+  return toInt(current);
+}
+
+void setGlobCurrent(in int newcur)
+{
+  alias GI = GlobIndex;
+  globCurrent = GI(bound(
+                 newcur,
+                 0,
+                 cast(int)fileList.globMatches - 1));
+}
+
+static int charToInt(in dchar c)
+{
+  assert(c.isDigit);
+  return c - '0';
+}
+
+void onMarkedFiles(scope void delegate(ViewIndex v) dg)
+{
+  int m = dataStack.pop!MARK().ifNull(cur);
+  int beg, end;
+  if (m > cur) {
+    beg = cur;
+    end = m + 1;
+  } else {
+    beg = m;
+    end = cur + 1;
+  }
+
+  foreach (v; beg .. end)
+  {
+    dg(ViewIndex(v));
+  }
+}
 
 
-#line 1404 "sf.nw"
+#line 1381 "sf.nw"
+  int state = START;
+  dchar c;
   while (true) {
-    
-#line 1111 "sf.nw"
-c   = cast(dchar)readKey();
-
-#line 1406 "sf.nw"
+    c = cast(dchar)readKey();
     switch(state) {
       
-#line 1117 "sf.nw"
+#line 1100 "sf.nw"
 case START:
   clearEcho();
   if (c.isWhite) {
@@ -1148,9 +1156,9 @@ case START:
   }
   break;
 
-#line 1408 "sf.nw"
+#line 1387 "sf.nw"
       
-#line 1147 "sf.nw"
+#line 1130 "sf.nw"
 case READ_CH:
   writeChar(c);
   dataStack.push!CH(c);
@@ -1179,17 +1187,17 @@ case READ_NUM:
   }
   break;
 
-#line 1409 "sf.nw"
+#line 1388 "sf.nw"
       
-#line 1182 "sf.nw"
+#line 1165 "sf.nw"
 case READ_COMMAND:
   switch (c) {
     
-#line 1194 "sf.nw"
+#line 1177 "sf.nw"
 case 'r':
   fileList.reverse(); break;
 
-#line 1205 "sf.nw"
+#line 1188 "sf.nw"
 case 'j':
   setCurrent(cur + dataStack.pop!NUM().ifNull(1));
   break;
@@ -1208,69 +1216,23 @@ case 'm':
   dataStack.push!MARK(cur);
   break;
 
-#line 1244 "sf.nw"
+#line 1213 "sf.nw"
 case 's':
-  
-#line 1233 "sf.nw"
-m = dataStack.pop!MARK().ifNull(cur);
-
-if (m > cur) {
-  beg = cur;
-  end = m + 1;
-} else {
-  beg = m;
-  end = cur + 1;
-}
-
-#line 1246 "sf.nw"
-  foreach (v; beg .. end) {
-    auto v1 = ViewIndex(v);
-    fileList.select(v1);
-  }
+  onMarkedFiles(v => fileList.select(v));
   break;
 case 'S':
-  
-#line 1233 "sf.nw"
-m = dataStack.pop!MARK().ifNull(cur);
-
-if (m > cur) {
-  beg = cur;
-  end = m + 1;
-} else {
-  beg = m;
-  end = cur + 1;
-}
-
-#line 1253 "sf.nw"
-  foreach (v; beg .. end) {
-    auto v1 = ViewIndex(v);
-    fileList.deselect(v1);
-  }
+  onMarkedFiles(v => fileList.deselect(v));
   break;
 case 't':
-  
-#line 1233 "sf.nw"
-m = dataStack.pop!MARK().ifNull(cur);
-
-if (m > cur) {
-  beg = cur;
-  end = m + 1;
-} else {
-  beg = m;
-  end = cur + 1;
-}
-
-#line 1260 "sf.nw"
-  foreach (v; beg .. end) {
-    auto v1 = ViewIndex(v);
-    if (fileList.isSelected(v1))
-      fileList.deselect(v1);
+  onMarkedFiles(v => {
+    if (fileList.isSelected(v))
+      fileList.deselect(v);
     else
-      fileList.select(v1);
-  }
+      fileList.select(v);
+    }());
   break;
 
-#line 1273 "sf.nw"
+#line 1232 "sf.nw"
 case 'a':
   auto sortarg = dataStack.pop!CH().ifNull(dchar('n'));
   switch (sortarg) {
@@ -1285,7 +1247,7 @@ case 'a':
   }
   break;
 
-#line 1292 "sf.nw"
+#line 1251 "sf.nw"
 case 'g':
   string globarg = dataStack.pop!STR().ifNull("");
   fileList.glob(globarg);
@@ -1324,7 +1286,7 @@ case 'N':
   state = START;
   break;
 
-#line 1333 "sf.nw"
+#line 1292 "sf.nw"
 case 'q':
   writeFiles = true;
   goto quit;
@@ -1333,10 +1295,10 @@ case 'Q':
   writeFiles = false;
   goto quit;
 
-#line 1342 "sf.nw"
+#line 1301 "sf.nw"
 default: break; // Unknown command letter.
 
-#line 1349 "sf.nw"
+#line 1308 "sf.nw"
 case 'p':
   clearEcho();
   auto top = dataStack.peek();
@@ -1348,17 +1310,17 @@ case 'P':
   dataStack.popAny();
   break;
 
-#line 1185 "sf.nw"
+#line 1168 "sf.nw"
   }
   state = START;
   break;
 
 default: assert(0);
 
-#line 1410 "sf.nw"
+#line 1389 "sf.nw"
     }
     
-#line 1436 "sf.nw"
+#line 1415 "sf.nw"
 int nlines = fileListWin.height;
 
 if (current < first) {
@@ -1373,7 +1335,7 @@ ViewIndex last = ViewIndex(
 reloadPad(iota(first, last));
 show();
 
-#line 1412 "sf.nw"
+#line 1391 "sf.nw"
   }
 
 quit: return;
@@ -1382,7 +1344,7 @@ quit: return;
 #line 916 "sf.nw"
 }
 
-#line 1454 "sf.nw"
+#line 1433 "sf.nw"
 alias IRS = InputRange!(const(string));
 
 void printn(IRS files)
@@ -1407,7 +1369,7 @@ void printz(IRS files)
 }
 
 
-#line 1488 "sf.nw"
+#line 1467 "sf.nw"
 void main(string[] args)
 {
   enum OutputFormat {
