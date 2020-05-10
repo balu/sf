@@ -562,12 +562,13 @@ Rectangle fileListPad;
 Rectangle echoWin;
 
 @ The full screen is desribed by the rectangle [[screen]]. The
-rectangles [[echoWin]] and [[fileListWin]] describes the echo area and the file list area. Our UI consists of two parts: the file list and
-the echo area. The file list displays the list of files (or a part of
-it) in the user-specified order. The echo area is for interacting with
-the user. The file list window will occupy all but the last line of
-the user's screen. The last line will be occupied by the window
-[[echoWin]].
+rectangles [[echoWin]] and [[fileListWin]] describes the echo area
+and the file list area. Our UI consists of two parts: the file list
+and the echo area. The file list displays the list of files (or a
+part of it) in the user-specified order. The echo area is for
+interacting with the user. The file list window will occupy all but
+the last line of the user's screen. The last line will be occupied
+by the window [[echoWin]].
 
 The ncurses pad [[fileListPad]] contains a framebuffer representation
 of the file list. If there are $n$ files in the file list, then the
@@ -618,6 +619,7 @@ fileListPad.y      = 0;
 fileListPad.win    = newpad(
   fileListPad.height,
   fileListPad.width);
+set_escdelay(25);
 
 @ The window [[fileListWin]] will display the appropriate portion of
 the pad. The variable [[first]] contains the view index of the the
@@ -927,7 +929,7 @@ auto readKey()
 {
   dchar c;
   enforce(
-    wget_wch(echoWin.win, &c) == OK,
+    wget_wch(echoWin.win, &c) != ERR,
     "sf: Failed to initialize UI."
   );
   return c;
@@ -945,7 +947,7 @@ void writeStr(string s)
 
 void clearEcho()
 {
-  wclear(echoWin.win);
+  werase(echoWin.win);
 }
 
 void pushBackKey(dchar ch)
@@ -994,8 +996,7 @@ static struct DataStack(size_t nelems) {
         type = CH;
         ch = cast(dchar)data;
       } else {
-        static assert(false,
-	  "DataStackElem: Unsupported data type.");
+        static assert(false, "DataStackElem: Unsupported data type.");
       }
     }
 
@@ -1382,6 +1383,11 @@ void loop()
   dchar c;
   while (true) {
     c = cast(dchar)readKey();
+    if (c == 27) {
+      state = START;
+      clearEcho();
+      continue;
+    }
     switch(state) {
       <<Start state>>
       <<Read data items>>
