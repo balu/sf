@@ -106,8 +106,6 @@ arguments to this option are:
 \item [\unix{n}] One file per-line. Assumes that there are no newlines
 in filenames. This is the default.
 
-\item [\unix{q}] Double-quoted, separated by spaces.
-
 \item [\unix{z}] Files are separated by null-bytes. This can be useful
 to interface with \unix{xargs}.
 
@@ -1443,14 +1441,6 @@ void printn(IRS files)
   foreach (f; files) writeln(f);
 }
 
-void printq(IRS files)
-{
-  foreach (f; files) {
-    write("\""); write(f); write("\"");
-    write(" ");
-  }
-}
-
 void printz(IRS files)
 {
   foreach (f; files) {
@@ -1474,7 +1464,6 @@ void main(string[] args)
 {
   enum OutputFormat {
   n,
-  q,
   z,
   }
 
@@ -1482,7 +1471,6 @@ void main(string[] args)
 
   auto ohelp = r"Output format
     n - One file per-line. Assumes there are no newlines in filenames. (default)
-    q - Double-quoted, separated by spaces.
     z - Separated by null bytes.";
 
   auto proghelp =
@@ -1525,8 +1513,6 @@ sf <options> -: Select files from the list of files in standard input.";
     final switch (outFormat) {
     case OutputFormat.n:
       return &printn;
-    case OutputFormat.q:
-      return &printq;
     case OutputFormat.z:
       return &printz;
     }

@@ -1,7 +1,3 @@
-Demo
-
-![](https://github.com/balu/sf/blob/master/sfdemo.gif?raw=true)
-
 Download
 
 > dub fetch sf
